@@ -24,20 +24,26 @@ interface Route {
   orders: Order[]
 }
 
-export default function DriverPage({ params }: { params: { routeId: string } }) {
+export default function DriverPage({ params }: { params: Promise<{ routeId: string }> }) {
   const [route, setRoute] = useState<Route | null>(null)
   const [loading, setLoading] = useState(true)
   const [token, setToken] = useState('')
   const [error, setError] = useState('')
   const [deliveryError, setDeliveryError] = useState('')
+  const [routeId, setRouteId] = useState('')
 
   useEffect(() => {
+    params.then(({ routeId: rid }) => setRouteId(rid))
+  }, [params])
+
+  useEffect(() => {
+    if (!routeId) return
     const t = localStorage.getItem('token') || ''
     setToken(t)
 
     const fetchRoute = async () => {
       try {
-        const res = await axios.get(`/api/routes/${params.routeId}`, {
+        const res = await axios.get(`/api/routes/${routeId}`, {
           headers: { Authorization: `Bearer ${t}` }
         })
         setRoute(res.data)
@@ -49,7 +55,7 @@ export default function DriverPage({ params }: { params: { routeId: string } }) 
     }
 
     fetchRoute()
-  }, [params.routeId])
+  }, [routeId])
 
   const markDelivered = async (orderId: string) => {
     try {
