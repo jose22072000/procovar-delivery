@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import type { Map, Marker, Polyline } from 'leaflet'
 
 interface Stop {
   id: string
@@ -15,10 +16,12 @@ interface MapComponentProps {
   onStopClick?: (id: string) => void
 }
 
+type MapLayer = Marker | Polyline
+
 export default function MapComponent({ stops, onStopClick }: MapComponentProps) {
   const mapRef = useRef<HTMLDivElement>(null)
-  const mapInstanceRef = useRef<unknown>(null)
-  const markersRef = useRef<unknown[]>([])
+  const mapInstanceRef = useRef<Map | null>(null)
+  const markersRef = useRef<MapLayer[]>([])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -26,9 +29,9 @@ export default function MapComponent({ stops, onStopClick }: MapComponentProps) 
     const initMap = async () => {
       const L = (await import('leaflet')).default
 
-      // Fix leaflet default icon
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      delete (L.Icon.Default.prototype as any)._getIconUrl
+      // Fix leaflet default icon issue with webpack
+      const iconPrototype = L.Icon.Default.prototype as L.Icon.Default & { _getIconUrl?: unknown }
+      delete iconPrototype._getIconUrl
       L.Icon.Default.mergeOptions({
         iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
         iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
@@ -36,24 +39,22 @@ export default function MapComponent({ stops, onStopClick }: MapComponentProps) 
       })
 
       if (!mapInstanceRef.current && mapRef.current) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        mapInstanceRef.current = L.map(mapRef.current).setView([-23.5505, -46.6333], 11) as any
+        mapInstanceRef.current = L.map(mapRef.current).setView([-23.5505, -46.6333], 11)
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '© OpenStreetMap contributors',
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        }).addTo(mapInstanceRef.current as any)
+        }).addTo(mapInstanceRef.current)
       }
 
       // Clear existing markers
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(markersRef.current as any[]).forEach((m: any) => m.remove())
+      markersRef.current.forEach((m) => m.remove())
       markersRef.current = []
+
+      if (!mapInstanceRef.current) return
 
       // Add markers
       stops.forEach((stop, idx) => {
         const marker = L.marker([stop.lat, stop.lng])
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .addTo(mapInstanceRef.current as any)
+          .addTo(mapInstanceRef.current!)
           .bindPopup(`<b>${idx + 1}. ${stop.label}</b>`)
 
         if (onStopClick) {
@@ -67,14 +68,11 @@ export default function MapComponent({ stops, onStopClick }: MapComponentProps) 
       if (stops.length > 1) {
         const latlngs = stops.map((s) => [s.lat, s.lng] as [number, number])
         const polyline = L.polyline(latlngs, { color: '#2563EB', weight: 3, opacity: 0.7 })
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .addTo(mapInstanceRef.current as any)
+          .addTo(mapInstanceRef.current)
         markersRef.current.push(polyline)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(mapInstanceRef.current as any).fitBounds(polyline.getBounds(), { padding: [20, 20] })
+        mapInstanceRef.current.fitBounds(polyline.getBounds(), { padding: [20, 20] })
       } else if (stops.length === 1) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(mapInstanceRef.current as any).setView([stops[0].lat, stops[0].lng], 13)
+        mapInstanceRef.current.setView([stops[0].lat, stops[0].lng], 13)
       }
     }
 

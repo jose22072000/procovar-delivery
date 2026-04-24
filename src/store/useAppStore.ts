@@ -17,18 +17,30 @@ interface AppState {
 
 export const useAppStore = create<AppState>((set) => ({
   user: null,
-  token: typeof window !== 'undefined' ? localStorage.getItem('token') : null,
+  token: null,
   setUser: (user) => set({ user }),
   setToken: (token) => {
-    if (token) {
-      localStorage.setItem('token', token)
-    } else {
-      localStorage.removeItem('token')
+    if (typeof window !== 'undefined') {
+      if (token) {
+        localStorage.setItem('token', token)
+      } else {
+        localStorage.removeItem('token')
+      }
     }
     set({ token })
   },
   logout: () => {
-    localStorage.removeItem('token')
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('token')
+    }
     set({ user: null, token: null })
   },
 }))
+
+// Hydrate token from localStorage on client only
+if (typeof window !== 'undefined') {
+  const storedToken = localStorage.getItem('token')
+  if (storedToken) {
+    useAppStore.setState({ token: storedToken })
+  }
+}

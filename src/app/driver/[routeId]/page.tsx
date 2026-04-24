@@ -27,8 +27,9 @@ interface Route {
 export default function DriverPage({ params }: { params: { routeId: string } }) {
   const [route, setRoute] = useState<Route | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [token, setToken] = useState('')
+  const [error, setError] = useState('')
+  const [deliveryError, setDeliveryError] = useState('')
 
   useEffect(() => {
     const t = localStorage.getItem('token') || ''
@@ -65,7 +66,8 @@ export default function DriverPage({ params }: { params: { routeId: string } }) 
         }
       })
     } catch {
-      alert('Failed to update status')
+      setDeliveryError('Failed to update delivery status. Please try again.')
+      setTimeout(() => setDeliveryError(''), 4000)
     }
   }
 
@@ -119,6 +121,11 @@ export default function DriverPage({ params }: { params: { routeId: string } }) 
       </div>
 
       <div className="p-4 space-y-3">
+        {deliveryError && (
+          <div className="bg-red-50 text-red-600 px-4 py-3 rounded-xl text-sm">
+            {deliveryError}
+          </div>
+        )}
         {sortedOrders.map((order, idx) => (
           <div
             key={order.id}

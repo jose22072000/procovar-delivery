@@ -152,9 +152,7 @@ export default function RoutesPage() {
                       Driver View →
                     </a>
                     <button
-                      onClick={() => {
-                        if (confirm('Delete this route?')) deleteRoute.mutate(route.id)
-                      }}
+                      onClick={() => deleteRoute.mutate(route.id)}
                       className="text-xs text-red-500 hover:underline"
                     >
                       Delete

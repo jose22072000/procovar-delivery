@@ -160,9 +160,7 @@ export default function OrdersPage() {
             <OrderTable
               orders={filteredOrders}
               onEdit={handleEdit}
-              onDelete={(id) => {
-                if (confirm('Delete this order?')) deleteMutation.mutate(id)
-              }}
+              onDelete={(id) => deleteMutation.mutate(id)}
             />
           )}
         </div>
