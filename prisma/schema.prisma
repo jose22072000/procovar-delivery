@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("admin")
+  createdAt DateTime @default(now())
+  orders    Order[]
+  routes    Route[]
+}
+
+model Order {
+  id           String    @id @default(cuid())
+  customerName String
+  address      String
+  lat          Float?
+  lng          Float?
+  weight       Float     @default(1)
+  status       String    @default("pending")
+  notes        String?
+  routeId      String?
+  route        Route?    @relation(fields: [routeId], references: [id])
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  price        Float?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  stopOrder    Int?
+  deliveredAt  DateTime?
+}
+
+model Route {
+  id            String   @id @default(cuid())
+  name          String
+  status        String   @default("planned")
+  totalDistance Float    @default(0)
+  totalWeight   Float    @default(0)
+  totalPrice    Float    @default(0)
+  orders        Order[]
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  optimized     Boolean  @default(false)
+}
+
+model Settings {
+  id        String @id @default(cuid())
+  baseFee   Float  @default(5.0)
+  costPerKm Float  @default(1.5)
+  costPerKg Float  @default(0.5)
+  currency  String @default("USD")
+}
