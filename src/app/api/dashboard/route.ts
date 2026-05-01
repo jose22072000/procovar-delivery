@@ -8,26 +8,24 @@ export async function GET(req: NextRequest) {
   const user = getUserFromRequest(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const [totalOrders, totalRoutes, deliveredOrders] = await Promise.all([
+  const [totalOrders, totalVehicles, orders] = await Promise.all([
     prisma.order.count({ where: { userId: user.id as string } }),
-    prisma.route.count({ where: { userId: user.id as string } }),
-    prisma.order.count({ where: { userId: user.id as string, status: 'delivered' } }),
+    prisma.vehicle.count({ where: { userId: user.id as string } }),
+    prisma.order.findMany({
+      where: { userId: user.id as string },
+      select: { price: true, weight: true },
+    }),
   ])
 
-  const routes = await prisma.route.findMany({
-    where: { userId: user.id as string },
-    select: { totalDistance: true, totalPrice: true }
-  })
-
-  const totalRevenue = routes.reduce((sum, r) => sum + (r.totalPrice || 0), 0)
-  const totalDistance = routes.reduce((sum, r) => sum + (r.totalDistance || 0), 0)
+  const totalRevenue = orders.reduce((sum, o) => sum + (o.price || 0), 0)
+  const totalWeight = orders.reduce((sum, o) => sum + (o.weight || 0), 0)
+  const avgPrice = totalOrders > 0 ? totalRevenue / totalOrders : 0
 
   return NextResponse.json({
     totalOrders,
-    totalRoutes,
-    deliveredOrders,
-    pendingOrders: totalOrders - deliveredOrders,
+    totalVehicles,
     totalRevenue,
-    totalDistance,
+    totalWeight,
+    avgPrice,
   })
 }

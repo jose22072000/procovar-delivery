@@ -6,6 +6,7 @@ import PricingSummaryCard from '@/components/PricingSummaryCard'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { useAppStore } from '@/store/useAppStore'
+import { Icon } from '@iconify/react'
 
 export default function SettingsPage() {
   const { token } = useAppStore()
@@ -70,7 +71,7 @@ export default function SettingsPage() {
       <div className="p-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-2xl shadow-md p-6">
-            <h3 className="font-bold text-gray-800 mb-6">💰 Pricing Configuration</h3>
+            <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><Icon icon="mdi:currency-usd" className="text-xl text-primary" /> Pricing Configuration</h3>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -134,8 +135,8 @@ export default function SettingsPage() {
 
               <div className="pt-2">
                 {saved && (
-                  <div className="bg-green-50 text-green-600 px-4 py-3 rounded-xl text-sm mb-3">
-                    ✅ Settings saved successfully!
+                  <div className="bg-green-50 text-green-600 px-4 py-3 rounded-xl text-sm mb-3 flex items-center gap-2">
+                    <Icon icon="mdi:check-circle" className="text-lg" /> Settings saved successfully!
                   </div>
                 )}
                 <button
@@ -159,7 +160,7 @@ export default function SettingsPage() {
             />
 
             <div className="bg-white rounded-2xl shadow-md p-6">
-              <h3 className="font-bold text-gray-800 mb-4">📝 Pricing Formula</h3>
+              <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Icon icon="mdi:function-variant" className="text-xl text-primary" /> Pricing Formula</h3>
               <div className="bg-gray-50 p-4 rounded-xl font-mono text-sm">
                 <p className="text-gray-700">price = base_fee</p>
                 <p className="text-gray-700">      + (distance_km × cost_per_km)</p>

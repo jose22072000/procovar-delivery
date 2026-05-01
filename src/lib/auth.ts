@@ -1,6 +1,13 @@
 import jwt from 'jsonwebtoken'
 import { NextRequest } from 'next/server'
 
+export interface AuthUser {
+  id: string
+  email: string
+  name: string
+  role: string
+}
+
 if (!process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET environment variable is not set')
 }
@@ -28,8 +35,20 @@ export function getTokenFromRequest(req: NextRequest): string | null {
   return cookieToken || null
 }
 
-export function getUserFromRequest(req: NextRequest): Record<string, unknown> | null {
+export function getUserFromRequest(req: NextRequest): AuthUser | null {
   const token = getTokenFromRequest(req)
   if (!token) return null
-  return verifyToken(token)
+  const payload = verifyToken(token)
+  if (!payload) return null
+
+  const id = payload.id
+  const email = payload.email
+  const name = payload.name
+  const role = payload.role
+
+  if (typeof id !== 'string' || typeof email !== 'string' || typeof name !== 'string' || typeof role !== 'string') {
+    return null
+  }
+
+  return { id, email, name, role }
 }

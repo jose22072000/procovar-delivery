@@ -1,3 +1,5 @@
+import { Icon } from '@iconify/react'
+
 interface PricingSummaryCardProps {
   baseFee: number
   costPerKm: number
@@ -13,7 +15,7 @@ export default function PricingSummaryCard({
 
   return (
     <div className="bg-white rounded-2xl shadow-md p-6 border border-gray-100">
-      <h3 className="font-bold text-gray-800 mb-4">💰 Pricing Breakdown</h3>
+      <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Icon icon="mdi:currency-usd" className="text-xl text-primary" /> Pricing Breakdown</h3>
       <div className="space-y-3">
         <div className="flex justify-between text-sm">
           <span className="text-gray-600">Base Fee</span>

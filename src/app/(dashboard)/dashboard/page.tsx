@@ -4,16 +4,19 @@ import Navbar from '@/components/Navbar'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { useAppStore } from '@/store/useAppStore'
+import { Icon } from '@iconify/react'
+import Link from 'next/link'
 
-function StatCard({ label, value, icon, color }: { label: string; value: string | number; icon: string; color: string }) {
+function StatCard({ label, value, icon, color, sub }: { label: string; value: string | number; icon: string; color: string; sub?: string }) {
   return (
     <div className={`bg-white rounded-2xl shadow-md p-6 border-l-4 ${color}`}>
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-gray-500">{label}</p>
           <p className="text-3xl font-bold text-gray-800 mt-1">{value}</p>
+          {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
         </div>
-        <span className="text-3xl">{icon}</span>
+        <Icon icon={icon} className="text-4xl text-gray-300" />
       </div>
     </div>
   )
@@ -37,51 +40,71 @@ export default function DashboardPage() {
     <div className="flex flex-col">
       <Navbar title="Dashboard" />
       <div className="p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <StatCard label="Total Orders" value={stats?.totalOrders || 0} icon="📦" color="border-blue-500" />
-          <StatCard label="Delivered" value={stats?.deliveredOrders || 0} icon="✅" color="border-green-500" />
-          <StatCard label="Total Distance" value={`${(stats?.totalDistance || 0).toFixed(1)} km`} icon="🗺️" color="border-yellow-500" />
-          <StatCard label="Total Revenue" value={`$${(stats?.totalRevenue || 0).toFixed(2)}`} icon="💰" color="border-purple-500" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <StatCard
+            label="Total de Órdenes"
+            value={stats?.totalOrders || 0}
+            icon="mdi:package-variant-closed"
+            color="border-blue-500"
+          />
+          <StatCard
+            label="Ingresos Totales"
+            value={`$${(stats?.totalRevenue || 0).toFixed(2)}`}
+            icon="mdi:currency-usd"
+            color="border-green-500"
+            sub={stats?.totalOrders > 0 ? `Promedio $${(stats.avgPrice || 0).toFixed(2)} por orden` : undefined}
+          />
+          <StatCard
+            label="Vehículos Registrados"
+            value={stats?.totalVehicles || 0}
+            icon="mdi:truck-outline"
+            color="border-purple-500"
+            sub={`${(stats?.totalWeight || 0).toFixed(0)} kg peso total entregado`}
+          />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white rounded-2xl shadow-md p-6">
-            <h3 className="font-bold text-gray-800 mb-4">📊 Quick Stats</h3>
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <Icon icon="mdi:chart-bar" className="text-xl text-primary" /> Resumen
+            </h3>
             <div className="space-y-3">
               <div className="flex justify-between items-center py-2 border-b">
-                <span className="text-gray-600">Total Routes</span>
-                <span className="font-semibold">{stats?.totalRoutes || 0}</span>
+                <span className="text-gray-600">Total órdenes</span>
+                <span className="font-semibold">{stats?.totalOrders || 0}</span>
               </div>
               <div className="flex justify-between items-center py-2 border-b">
-                <span className="text-gray-600">Pending Orders</span>
-                <span className="font-semibold text-yellow-600">{stats?.pendingOrders || 0}</span>
+                <span className="text-gray-600">Ingresos totales</span>
+                <span className="font-semibold text-green-600">${(stats?.totalRevenue || 0).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b">
+                <span className="text-gray-600">Precio promedio por orden</span>
+                <span className="font-semibold text-blue-600">${(stats?.avgPrice || 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center py-2">
-                <span className="text-gray-600">Delivery Rate</span>
-                <span className="font-semibold text-green-600">
-                  {stats?.totalOrders
-                    ? `${Math.round((stats.deliveredOrders / stats.totalOrders) * 100)}%`
-                    : '0%'}
-                </span>
+                <span className="text-gray-600">Peso total entregado</span>
+                <span className="font-semibold">{(stats?.totalWeight || 0).toFixed(1)} kg</span>
               </div>
             </div>
           </div>
 
           <div className="bg-white rounded-2xl shadow-md p-6">
-            <h3 className="font-bold text-gray-800 mb-4">🚀 Quick Actions</h3>
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <Icon icon="mdi:lightning-bolt" className="text-xl text-primary" /> Acciones Rápidas
+            </h3>
             <div className="space-y-3">
-              <a href="/orders" className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors">
-                <span>📦</span>
-                <span className="text-sm font-medium text-blue-700">Manage Orders</span>
-              </a>
-              <a href="/routes" className="flex items-center gap-3 p-3 bg-green-50 rounded-xl hover:bg-green-100 transition-colors">
-                <span>🗺️</span>
-                <span className="text-sm font-medium text-green-700">Plan Routes</span>
-              </a>
-              <a href="/settings" className="flex items-center gap-3 p-3 bg-yellow-50 rounded-xl hover:bg-yellow-100 transition-colors">
-                <span>⚙️</span>
-                <span className="text-sm font-medium text-yellow-700">Configure Pricing</span>
-              </a>
+              <Link href="/orders" className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors">
+                <Icon icon="mdi:package-variant-closed" className="text-xl text-blue-600" />
+                <span className="text-sm font-medium text-blue-700">Gestionar Órdenes</span>
+              </Link>
+              <Link href="/reports" className="flex items-center gap-3 p-3 bg-green-50 rounded-xl hover:bg-green-100 transition-colors">
+                <Icon icon="mdi:chart-bar" className="text-xl text-green-600" />
+                <span className="text-sm font-medium text-green-700">Ver Reportes</span>
+              </Link>
+              <Link href="/vehicles" className="flex items-center gap-3 p-3 bg-yellow-50 rounded-xl hover:bg-yellow-100 transition-colors">
+                <Icon icon="mdi:truck-cargo-container" className="text-xl text-yellow-600" />
+                <span className="text-sm font-medium text-yellow-700">Gestionar Flota</span>
+              </Link>
             </div>
           </div>
         </div>

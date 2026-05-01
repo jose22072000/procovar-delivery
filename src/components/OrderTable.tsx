@@ -1,73 +1,131 @@
 'use client'
 
+import { Icon } from '@iconify/react'
+
 interface Order {
   id: string
   customerName: string
   address: string
+  startAddress?: string | null
+  endAddress?: string | null
+  startLat?: number | null
+  startLng?: number | null
+  endLat?: number | null
+  endLng?: number | null
+  lat?: number | null
+  lng?: number | null
   weight: number
   status: string
   price?: number | null
   createdAt: string
+  vehicle?: { id: string; name: string } | null
+  vehicleAssignments?: Array<{
+    vehicleId: string
+    vehicle: {
+      id: string
+      name: string
+      plate?: string | null
+    }
+  }>
 }
 
 interface OrderTableProps {
   orders: Order[]
   onEdit?: (order: Order) => void
   onDelete?: (id: string) => void
+  onViewMap?: (order: Order) => void
 }
 
-const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  in_transit: 'bg-blue-100 text-blue-800',
-  delivered: 'bg-green-100 text-green-800',
-  cancelled: 'bg-red-100 text-red-800',
+function hasCoords(order: Order): boolean {
+  return !!((order.startLat || order.lat) && (order.endLat || order.lng))
 }
 
-export default function OrderTable({ orders, onEdit, onDelete }: OrderTableProps) {
+export default function OrderTable({ orders, onEdit, onDelete, onViewMap }: OrderTableProps) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b">
-            <th className="text-left py-3 px-4 font-semibold text-gray-600">Customer</th>
-            <th className="text-left py-3 px-4 font-semibold text-gray-600">Address</th>
-            <th className="text-left py-3 px-4 font-semibold text-gray-600">Weight</th>
-            <th className="text-left py-3 px-4 font-semibold text-gray-600">Status</th>
-            <th className="text-left py-3 px-4 font-semibold text-gray-600">Price</th>
-            <th className="text-left py-3 px-4 font-semibold text-gray-600">Actions</th>
+          <tr className="border-b bg-gray-50">
+            <th className="text-left py-3 px-4 font-semibold text-gray-600">Cliente</th>
+            <th className="text-left py-3 px-4 font-semibold text-gray-600">Ruta</th>
+            <th className="text-left py-3 px-4 font-semibold text-gray-600">Peso</th>
+            <th className="text-left py-3 px-4 font-semibold text-gray-600">Vehículo</th>
+            <th className="text-left py-3 px-4 font-semibold text-gray-600">Precio</th>
+            <th className="text-left py-3 px-4 font-semibold text-gray-600">Fecha</th>
+            <th className="text-left py-3 px-4 font-semibold text-gray-600">Acciones</th>
           </tr>
         </thead>
         <tbody>
           {orders.map((order) => (
             <tr key={order.id} className="border-b hover:bg-gray-50 transition-colors">
               <td className="py-3 px-4 font-medium">{order.customerName}</td>
-              <td className="py-3 px-4 text-gray-600 max-w-xs truncate">{order.address}</td>
+              <td className="py-3 px-4 text-gray-600 max-w-xs">
+                <div className="flex items-center gap-1 truncate text-xs">
+                  <span className="inline-block w-4 h-4 rounded-full bg-green-500 text-white text-center leading-4 text-[9px] font-bold flex-shrink-0">A</span>
+                  <span className="truncate">{order.startAddress || 'Origen'}</span>
+                </div>
+                <div className="flex items-center gap-1 truncate text-xs mt-0.5">
+                  <span className="inline-block w-4 h-4 rounded-full bg-red-500 text-white text-center leading-4 text-[9px] font-bold flex-shrink-0">B</span>
+                  <span className="truncate">{order.endAddress || order.address}</span>
+                </div>
+              </td>
               <td className="py-3 px-4 text-gray-600">{order.weight} kg</td>
-              <td className="py-3 px-4">
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
-                  {order.status.replace('_', ' ')}
-                </span>
-              </td>
-              <td className="py-3 px-4 text-gray-600">
-                {order.price ? `$${order.price.toFixed(2)}` : '-'}
+              <td className="py-3 px-4 text-gray-600 max-w-[180px] truncate">
+                {order.vehicleAssignments && order.vehicleAssignments.length > 0
+                  ? order.vehicleAssignments.map((a) => a.vehicle.name).join(', ')
+                  : '-'}
               </td>
               <td className="py-3 px-4">
-                <div className="flex gap-2">
+                {order.price != null
+                  ? <span className="font-semibold text-green-700">${order.price.toFixed(2)}</span>
+                  : <span className="text-gray-400">—</span>}
+              </td>
+              <td className="py-3 px-4 text-gray-500 text-xs whitespace-nowrap">
+                {new Date(order.createdAt).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </td>
+              <td className="py-3 px-4">
+                <div className="flex gap-1 items-center">
+                  {onViewMap && hasCoords(order) && (
+                    <div className="relative group">
+                      <button
+                        onClick={() => onViewMap(order)}
+                        className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 hover:text-green-800 transition-colors"
+                      >
+                        <Icon icon="mdi:map-marker-path" className="text-base" />
+                      </button>
+                      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block bg-gray-800 text-white text-xs rounded-lg px-2 py-1 whitespace-nowrap z-20 shadow-lg">
+                        Ver ruta en mapa
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+                      </div>
+                    </div>
+                  )}
                   {onEdit && (
-                    <button
-                      onClick={() => onEdit(order)}
-                      className="text-blue-600 hover:text-blue-800 text-xs font-medium"
-                    >
-                      Edit
-                    </button>
+                    <div className="relative group">
+                      <button
+                        onClick={() => onEdit(order)}
+                        className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 hover:text-blue-800 transition-colors"
+                      >
+                        <Icon icon="mdi:pencil-outline" className="text-base" />
+                      </button>
+                      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block bg-gray-800 text-white text-xs rounded-lg px-2 py-1 whitespace-nowrap z-20 shadow-lg">
+                        Editar
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+                      </div>
+                    </div>
                   )}
                   {onDelete && (
-                    <button
-                      onClick={() => onDelete(order.id)}
-                      className="text-red-600 hover:text-red-800 text-xs font-medium"
-                    >
-                      Delete
-                    </button>
+                    <div className="relative group">
+                      <button
+                        onClick={() => onDelete(order.id)}
+                        className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors"
+                      >
+                        <Icon icon="mdi:trash-can-outline" className="text-base" />
+                      </button>
+                      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block bg-gray-800 text-white text-xs rounded-lg px-2 py-1 whitespace-nowrap z-20 shadow-lg">
+                        Eliminar
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+                      </div>
+                    </div>
                   )}
                 </div>
               </td>
@@ -77,7 +135,7 @@ export default function OrderTable({ orders, onEdit, onDelete }: OrderTableProps
       </table>
       {orders.length === 0 && (
         <div className="text-center py-12 text-gray-500">
-          No orders found. Create your first order!
+          No hay órdenes. ¡Crea la primera orden!
         </div>
       )}
     </div>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import { Icon } from '@iconify/react'
 
 interface Order {
   id: string
@@ -81,7 +82,7 @@ export default function DriverPage({ params }: { params: Promise<{ routeId: stri
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <p className="text-2xl">🚚</p>
+          <Icon icon="mdi:truck-delivery" className="text-5xl text-primary mx-auto" />
           <p className="text-gray-500 mt-2">Loading route...</p>
         </div>
       </div>
@@ -92,7 +93,7 @@ export default function DriverPage({ params }: { params: Promise<{ routeId: stri
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <p className="text-2xl">❌</p>
+          <Icon icon="mdi:close-circle" className="text-5xl text-red-500 mx-auto" />
           <p className="text-red-500 mt-2">{error || 'Route not found'}</p>
         </div>
       </div>
@@ -110,7 +111,7 @@ export default function DriverPage({ params }: { params: Promise<{ routeId: stri
       <div className="bg-primary text-white p-4 sticky top-0 z-10">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-bold text-lg">🚚 Driver View</h1>
+            <h1 className="font-bold text-lg flex items-center gap-2"><Icon icon="mdi:truck-delivery" className="text-xl" /> Driver View</h1>
             <p className="text-blue-100 text-sm">{route.name}</p>
           </div>
           <div className="text-right">
@@ -159,8 +160,8 @@ export default function DriverPage({ params }: { params: Promise<{ routeId: stri
             <p className="text-sm text-gray-600 mb-3">{order.address}</p>
 
             {order.notes && (
-              <p className="text-xs text-amber-600 bg-amber-50 px-3 py-1 rounded-lg mb-3">
-                📝 {order.notes}
+              <p className="text-xs text-amber-600 bg-amber-50 px-3 py-1 rounded-lg mb-3 flex items-center gap-1">
+                <Icon icon="mdi:note-text-outline" className="text-sm" /> {order.notes}
               </p>
             )}
 
@@ -170,9 +171,9 @@ export default function DriverPage({ params }: { params: Promise<{ routeId: stri
                   href={`https://www.google.com/maps/dir/?api=1&destination=${order.lat},${order.lng}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 bg-blue-50 text-blue-700 py-2 rounded-xl text-sm font-medium text-center hover:bg-blue-100"
+                  className="flex-1 bg-blue-50 text-blue-700 py-2 rounded-xl text-sm font-medium text-center hover:bg-blue-100 flex items-center justify-center gap-1"
                 >
-                  🗺️ Navigate
+                  <Icon icon="mdi:navigation-variant" className="text-base" /> Navigate
                 </a>
               )}
 
@@ -184,8 +185,8 @@ export default function DriverPage({ params }: { params: Promise<{ routeId: stri
                   ✓ Mark Delivered
                 </button>
               ) : (
-                <div className="flex-1 bg-green-100 text-green-700 py-2 rounded-xl text-sm font-medium text-center">
-                  ✅ Delivered
+                <div className="flex-1 bg-green-100 text-green-700 py-2 rounded-xl text-sm font-medium text-center flex items-center justify-center gap-1">
+                  <Icon icon="mdi:check-circle" className="text-base" /> Delivered
                 </div>
               )}
             </div>

@@ -8,20 +8,47 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
+  id        String    @id @default(cuid())
+  email     String    @unique
   password  String
   name      String
-  role      String   @default("admin")
-  createdAt DateTime @default(now())
+  role      String    @default("admin")
+  createdAt DateTime  @default(now())
   orders    Order[]
   routes    Route[]
+  vehicles  Vehicle[]
+}
+
+model Vehicle {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   @default("truck")
+  plate     String?
+  capacity  Float    @default(1000)
+  baseFee   Float    @default(5.0)
+  costPerKm Float    @default(1.5)
+  costPerKg Float    @default(0.5)
+  status    String   @default("available")
+  notes     String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  routes    Route[]
+  orders    Order[]
+  orderAssignments OrderVehicle[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Order {
   id           String    @id @default(cuid())
   customerName String
   address      String
+  startAddress String?
+  endAddress   String?
+  startLat     Float?
+  startLng     Float?
+  endLat       Float?
+  endLng       Float?
   lat          Float?
   lng          Float?
   weight       Float     @default(1)
@@ -29,13 +56,28 @@ model Order {
   notes        String?
   routeId      String?
   route        Route?    @relation(fields: [routeId], references: [id])
+  vehicleId    String?
+  vehicle      Vehicle?  @relation(fields: [vehicleId], references: [id])
   userId       String
   user         User      @relation(fields: [userId], references: [id])
   price        Float?
+  vehicleAssignments OrderVehicle[]
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   stopOrder    Int?
   deliveredAt  DateTime?
+}
+
+model OrderVehicle {
+  id        String   @id @default(cuid())
+  orderId   String
+  vehicleId String
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, vehicleId])
 }
 
 model Route {
@@ -46,6 +88,8 @@ model Route {
   totalWeight   Float    @default(0)
   totalPrice    Float    @default(0)
   orders        Order[]
+  vehicleId     String?
+  vehicle       Vehicle? @relation(fields: [vehicleId], references: [id])
   userId        String
   user          User     @relation(fields: [userId], references: [id])
   createdAt     DateTime @default(now())

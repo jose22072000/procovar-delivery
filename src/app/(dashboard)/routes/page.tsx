@@ -1,5 +1,16 @@
 'use client'
 
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+
+export default function RoutesPage() {
+  const router = useRouter()
+  useEffect(() => { router.replace('/orders') }, [router])
+  return null
+}
+
+/* --- PLANIFICADOR DE RUTAS (temporalmente deshabilitado) ---
+
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import Navbar from '@/components/Navbar'
@@ -7,6 +18,7 @@ import RouteSummaryCard from '@/components/RouteSummaryCard'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { useAppStore } from '@/store/useAppStore'
+import { Icon } from '@iconify/react'
 
 const MapComponent = dynamic(() => import('@/components/MapComponent'), { ssr: false })
 
@@ -14,6 +26,12 @@ interface RouteOrder {
   id: string
   customerName: string
   address: string
+  startAddress?: string | null
+  endAddress?: string | null
+  startLat?: number | null
+  startLng?: number | null
+  endLat?: number | null
+  endLng?: number | null
   status: string
   weight: number
   lat?: number | null
@@ -30,6 +48,20 @@ interface Route {
   totalWeight: number
   totalPrice: number
   orders: RouteOrder[]
+  vehicleId?: string | null
+  vehicle?: { id: string; name: string; type: string; plate: string | null } | null
+}
+
+interface Vehicle {
+  id: string
+  name: string
+  type: string
+  plate: string | null
+  capacity: number
+  status: string
+  baseFee: number
+  costPerKm: number
+  costPerKg: number
 }
 
 interface UnassignedOrder {
@@ -38,6 +70,7 @@ interface UnassignedOrder {
   address: string
   weight: number
   routeId?: string | null
+  vehicleAssignments?: Array<{ vehicleId: string }>
 }
 
 export default function RoutesPage() {
@@ -45,6 +78,7 @@ export default function RoutesPage() {
   const queryClient = useQueryClient()
   const [showModal, setShowModal] = useState(false)
   const [routeName, setRouteName] = useState('')
+  const [selectedVehicleId, setSelectedVehicleId] = useState('')
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([])
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null)
 
@@ -52,6 +86,17 @@ export default function RoutesPage() {
     queryKey: ['routes'],
     queryFn: async () => {
       const res = await axios.get('/api/routes', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      return res.data
+    },
+    enabled: !!token
+  })
+
+  const { data: vehicles = [] } = useQuery({
+    queryKey: ['vehicles'],
+    queryFn: async () => {
+      const res = await axios.get('/api/vehicles', {
         headers: { Authorization: `Bearer ${token}` }
       })
       return res.data
@@ -82,6 +127,7 @@ export default function RoutesPage() {
       queryClient.invalidateQueries({ queryKey: ['orders-unassigned'] })
       setShowModal(false)
       setRouteName('')
+      setSelectedVehicleId('')
       setSelectedOrderIds([])
       setSelectedRoute(data)
     }
@@ -101,15 +147,21 @@ export default function RoutesPage() {
   })
 
   const mapStops = selectedRoute?.orders
-    ?.filter((o) => o.lat && o.lng)
+    ?.filter((o) => (o.endLat ?? o.lat) && (o.endLng ?? o.lng))
     ?.sort((a, b) => (a.stopOrder || 0) - (b.stopOrder || 0))
     ?.map((o) => ({
       id: o.id,
-      lat: o.lat!,
-      lng: o.lng!,
-      label: o.customerName,
+      lat: (o.endLat ?? o.lat)!,
+      lng: (o.endLng ?? o.lng)!,
+      label: `${o.customerName} · ${o.endAddress || o.address}`,
       status: o.status,
     })) || []
+
+  const compatibleOrders = (orders as UnassignedOrder[]).filter((order) => {
+    if (!selectedVehicleId) return true
+    if (!order.vehicleAssignments || order.vehicleAssignments.length === 0) return true
+    return order.vehicleAssignments.some((assignment) => assignment.vehicleId === selectedVehicleId)
+  })
 
   return (
     <div className="flex flex-col">
@@ -143,6 +195,12 @@ export default function RoutesPage() {
                     orderCount={route.orders?.length || 0}
                     onClick={() => setSelectedRoute(route)}
                   />
+                  {route.vehicle && (
+                    <div className="flex items-center gap-1 mt-1 text-xs text-gray-500 px-1">
+                      <Icon icon="mdi:truck-outline" className="text-sm" />
+                      {route.vehicle.name}{route.vehicle.plate ? ` · ${route.vehicle.plate}` : ''}
+                    </div>
+                  )}
                   <div className="flex gap-2 mt-2">
                     <a
                       href={`/driver/${route.id}`}
@@ -167,8 +225,9 @@ export default function RoutesPage() {
             {selectedRoute ? (
               <>
                 <div className="bg-white rounded-2xl shadow-md p-4">
-                  <h3 className="font-bold text-gray-800 mb-3">
-                    🗺️ {selectedRoute.name} Route Map
+                  <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <Icon icon="mdi:map-marker-path" className="text-xl text-primary" />
+                    {selectedRoute.name} Route Map
                   </h3>
                   {mapStops.length > 0 ? (
                     <MapComponent stops={mapStops} />
@@ -180,7 +239,7 @@ export default function RoutesPage() {
                 </div>
 
                 <div className="bg-white rounded-2xl shadow-md p-4">
-                  <h3 className="font-bold text-gray-800 mb-3">📋 Stops ({selectedRoute.orders?.length || 0})</h3>
+                  <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><Icon icon="mdi:clipboard-list-outline" className="text-xl text-primary" /> Stops ({selectedRoute.orders?.length || 0})</h3>
                   <div className="space-y-2">
                     {selectedRoute.orders
                       ?.sort((a, b) => (a.stopOrder || 0) - (b.stopOrder || 0))
@@ -191,7 +250,7 @@ export default function RoutesPage() {
                           </span>
                           <div className="flex-1">
                             <p className="text-sm font-medium">{order.customerName}</p>
-                            <p className="text-xs text-gray-500">{order.address}</p>
+                            <p className="text-xs text-gray-500">{order.startAddress || 'Start point'} → {order.endAddress || order.address}</p>
                           </div>
                           <span className={`text-xs px-2 py-1 rounded-full ${
                             order.status === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
@@ -218,7 +277,10 @@ export default function RoutesPage() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowModal(false); setRouteName(''); setSelectedVehicleId(''); setSelectedOrderIds([]) } }}
+        >
           <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-bold mb-4">Create New Route</h3>
 
@@ -235,16 +297,53 @@ export default function RoutesPage() {
               </div>
 
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                  <Icon icon="mdi:truck-outline" className="text-base" /> Assign Vehicle
+                </label>
+                <select
+                  value={selectedVehicleId}
+                  onChange={(e) => {
+                    const nextVehicleId = e.target.value
+                    setSelectedVehicleId(nextVehicleId)
+                    setSelectedOrderIds((prev) => prev.filter((orderId) => {
+                      const order = (orders as UnassignedOrder[]).find((item) => item.id === orderId)
+                      if (!order) return false
+                      if (!nextVehicleId) return true
+                      if (!order.vehicleAssignments || order.vehicleAssignments.length === 0) return true
+                      return order.vehicleAssignments.some((assignment) => assignment.vehicleId === nextVehicleId)
+                    }))
+                  }}
+                  className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">— Select a vehicle —</option>
+                  {(vehicles as Vehicle[]).filter((v) => v.status !== 'maintenance').map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}{v.plate ? ` (${v.plate})` : ''} · ${v.costPerKm}/km · ${v.costPerKg}/kg
+                    </option>
+                  ))}
+                </select>
+                {selectedVehicleId && (() => {
+                  const v = (vehicles as Vehicle[]).find((x) => x.id === selectedVehicleId)
+                  return v ? (
+                    <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                      <Icon icon="mdi:information-outline" className="text-sm" />
+                      Base ${v.baseFee} + ${v.costPerKm}/km + ${v.costPerKg}/kg — {v.capacity} kg capacity
+                    </p>
+                  ) : null
+                })()}
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Select Orders ({selectedOrderIds.length} selected)
                 </label>
                 <div className="max-h-64 overflow-y-auto border rounded-xl">
-                  {(orders as UnassignedOrder[]).length === 0 ? (
+                  {compatibleOrders.length === 0 ? (
                     <div className="p-4 text-center text-gray-500 text-sm">
-                      No unassigned orders available
+                      {selectedVehicleId ? 'No compatible unassigned orders for this vehicle' : 'No unassigned orders available'}
                     </div>
                   ) : (
-                    (orders as UnassignedOrder[]).map((order) => (
+                    compatibleOrders.map((order) => (
                       <label key={order.id} className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer border-b last:border-0">
                         <input
                           type="checkbox"
@@ -256,6 +355,7 @@ export default function RoutesPage() {
                               setSelectedOrderIds(selectedOrderIds.filter((id) => id !== order.id))
                             }
                           }}
+                          disabled={!selectedVehicleId}
                           className="rounded"
                         />
                         <div>
@@ -271,17 +371,17 @@ export default function RoutesPage() {
 
               <div className="flex gap-3 justify-end">
                 <button
-                  onClick={() => { setShowModal(false); setRouteName(''); setSelectedOrderIds([]) }}
+                  onClick={() => { setShowModal(false); setRouteName(''); setSelectedVehicleId(''); setSelectedOrderIds([]) }}
                   className="px-4 py-2 border rounded-xl text-gray-600 hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => {
-                    if (!routeName) return
-                    createRoute.mutate({ name: routeName, orderIds: selectedOrderIds })
+                    if (!routeName || !selectedVehicleId) return
+                    createRoute.mutate({ name: routeName, orderIds: selectedOrderIds, vehicleId: selectedVehicleId || null })
                   }}
-                  disabled={!routeName || createRoute.isPending}
+                  disabled={!routeName || !selectedVehicleId || createRoute.isPending}
                   className="px-4 py-2 bg-primary text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-50"
                 >
                   {createRoute.isPending ? 'Creating...' : 'Create Route'}
@@ -294,3 +394,5 @@ export default function RoutesPage() {
     </div>
   )
 }
+
+--- FIN PLANIFICADOR DE RUTAS DESHABILITADO --- */
