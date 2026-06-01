@@ -5,11 +5,9 @@ import { Icon } from '@iconify/react'
 interface Order {
   id: string
   customerName: string
+  operationNumber?: string | null
   address: string
-  startAddress?: string | null
   endAddress?: string | null
-  startLat?: number | null
-  startLng?: number | null
   endLat?: number | null
   endLng?: number | null
   lat?: number | null
@@ -18,15 +16,6 @@ interface Order {
   status: string
   price?: number | null
   createdAt: string
-  vehicle?: { id: string; name: string } | null
-  vehicleAssignments?: Array<{
-    vehicleId: string
-    vehicle: {
-      id: string
-      name: string
-      plate?: string | null
-    }
-  }>
 }
 
 interface OrderTableProps {
@@ -37,7 +26,7 @@ interface OrderTableProps {
 }
 
 function hasCoords(order: Order): boolean {
-  return !!((order.startLat || order.lat) && (order.endLat || order.lng))
+  return !!((order.endLat || order.lat) && (order.endLng || order.lng))
 }
 
 export default function OrderTable({ orders, onEdit, onDelete, onViewMap }: OrderTableProps) {
@@ -47,9 +36,9 @@ export default function OrderTable({ orders, onEdit, onDelete, onViewMap }: Orde
         <thead>
           <tr className="border-b bg-gray-50">
             <th className="text-left py-3 px-4 font-semibold text-gray-600">Cliente</th>
-            <th className="text-left py-3 px-4 font-semibold text-gray-600">Ruta</th>
+            <th className="text-left py-3 px-4 font-semibold text-gray-600">Nº Operación</th>
+            <th className="text-left py-3 px-4 font-semibold text-gray-600">Destino</th>
             <th className="text-left py-3 px-4 font-semibold text-gray-600">Peso</th>
-            <th className="text-left py-3 px-4 font-semibold text-gray-600">Vehículo</th>
             <th className="text-left py-3 px-4 font-semibold text-gray-600">Precio</th>
             <th className="text-left py-3 px-4 font-semibold text-gray-600">Fecha</th>
             <th className="text-left py-3 px-4 font-semibold text-gray-600">Acciones</th>
@@ -59,22 +48,11 @@ export default function OrderTable({ orders, onEdit, onDelete, onViewMap }: Orde
           {orders.map((order) => (
             <tr key={order.id} className="border-b hover:bg-gray-50 transition-colors">
               <td className="py-3 px-4 font-medium">{order.customerName}</td>
-              <td className="py-3 px-4 text-gray-600 max-w-xs">
-                <div className="flex items-center gap-1 truncate text-xs">
-                  <span className="inline-block w-4 h-4 rounded-full bg-green-500 text-white text-center leading-4 text-[9px] font-bold flex-shrink-0">A</span>
-                  <span className="truncate">{order.startAddress || 'Origen'}</span>
-                </div>
-                <div className="flex items-center gap-1 truncate text-xs mt-0.5">
-                  <span className="inline-block w-4 h-4 rounded-full bg-red-500 text-white text-center leading-4 text-[9px] font-bold flex-shrink-0">B</span>
-                  <span className="truncate">{order.endAddress || order.address}</span>
-                </div>
+              <td className="py-3 px-4 text-gray-500 text-xs">{order.operationNumber || '—'}</td>
+              <td className="py-3 px-4 text-gray-600 max-w-xs truncate text-xs">
+                {order.endAddress || order.address}
               </td>
               <td className="py-3 px-4 text-gray-600">{order.weight} kg</td>
-              <td className="py-3 px-4 text-gray-600 max-w-[180px] truncate">
-                {order.vehicleAssignments && order.vehicleAssignments.length > 0
-                  ? order.vehicleAssignments.map((a) => a.vehicle.name).join(', ')
-                  : '-'}
-              </td>
               <td className="py-3 px-4">
                 {order.price != null
                   ? <span className="font-semibold text-green-700">${order.price.toFixed(2)}</span>

@@ -48,6 +48,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   })
 
+  // When marking a vehicle as available, auto-complete its active route
+  if (data.status === 'available' && vehicle.status === 'in_use') {
+    await prisma.route.updateMany({
+      where: { vehicleId: id, status: { not: 'completed' } },
+      data: { status: 'completed' },
+    })
+  }
+
   return NextResponse.json(updated)
 }
 

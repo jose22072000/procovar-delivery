@@ -13,12 +13,10 @@ interface Vehicle {
   type: string
   plate: string | null
   capacity: number
-  baseFee: number
-  costPerKm: number
-  costPerKg: number
   status: string
   notes: string | null
   _count: { routes: number; orders: number }
+  routes?: { id: string; name: string; status: string }[]
 }
 
 interface VehicleFormData {
@@ -26,9 +24,6 @@ interface VehicleFormData {
   type: string
   plate: string
   capacity: string
-  baseFee: string
-  costPerKm: string
-  costPerKg: string
   status: string
   notes: string
 }
@@ -38,9 +33,6 @@ const defaultForm: VehicleFormData = {
   type: 'truck',
   plate: '',
   capacity: '1000',
-  baseFee: '5.00',
-  costPerKm: '1.50',
-  costPerKg: '0.50',
   status: 'available',
   notes: '',
 }
@@ -122,6 +114,19 @@ export default function VehiclesPage() {
     }
   })
 
+  const markAvailableMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await axios.patch(`/api/vehicles/${id}`, { status: 'available' }, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      return res.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] })
+      queryClient.invalidateQueries({ queryKey: ['routes'] })
+    }
+  })
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const data = {
@@ -129,9 +134,6 @@ export default function VehiclesPage() {
       type: form.type,
       plate: form.plate || null,
       capacity: parseFloat(form.capacity) || 1000,
-      baseFee: parseFloat(form.baseFee) || 5,
-      costPerKm: parseFloat(form.costPerKm) || 1.5,
-      costPerKg: parseFloat(form.costPerKg) || 0.5,
       status: form.status,
       notes: form.notes || null,
     }
@@ -149,9 +151,6 @@ export default function VehiclesPage() {
       type: vehicle.type,
       plate: vehicle.plate || '',
       capacity: vehicle.capacity.toString(),
-      baseFee: vehicle.baseFee.toString(),
-      costPerKm: vehicle.costPerKm.toString(),
-      costPerKg: vehicle.costPerKg.toString(),
       status: vehicle.status,
       notes: vehicle.notes || '',
     })
@@ -170,7 +169,7 @@ export default function VehiclesPage() {
       <div className="p-6">
 
         <div className="flex justify-between items-center mb-6">
-          <p className="text-gray-500 text-sm">Gestiona tu flota. Cada vehículo tiene sus propias tarifas para calcular el costo de las entregas.</p>
+          <p className="text-gray-500 text-sm">Gestiona tu flota. Las tarifas se configuran globalmente en Configuración.</p>
           <button
             onClick={openCreate}
             className="bg-primary text-white px-5 py-2 rounded-xl font-medium hover:bg-blue-700 transition-colors flex items-center gap-2"
@@ -219,33 +218,31 @@ export default function VehiclesPage() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3 mb-4 text-center">
+                <div className="grid grid-cols-2 gap-3 mb-4 text-center">
                   <div className="bg-gray-50 rounded-xl p-2">
-                    <p className="text-xs text-gray-500">Tarifa base</p>
-                    <p className="font-semibold text-sm text-gray-800">${vehicle.baseFee.toFixed(2)}</p>
+                    <p className="text-xs text-gray-500">Capacidad</p>
+                    <p className="font-semibold text-sm text-gray-800">{vehicle.capacity.toLocaleString()} kg</p>
                   </div>
                   <div className="bg-gray-50 rounded-xl p-2">
-                    <p className="text-xs text-gray-500">Por km</p>
-                    <p className="font-semibold text-sm text-gray-800">${vehicle.costPerKm.toFixed(2)}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-xl p-2">
-                    <p className="text-xs text-gray-500">Por kg</p>
-                    <p className="font-semibold text-sm text-gray-800">${vehicle.costPerKg.toFixed(2)}</p>
+                    <p className="text-xs text-gray-500">Rutas</p>
+                    <p className="font-semibold text-sm text-gray-800">{vehicle._count.routes}</p>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
-                  <span className="flex items-center gap-1">
-                    <Icon icon="mdi:weight" className="text-sm" />
-                    {vehicle.capacity.toLocaleString()} kg capacidad
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Icon icon="mdi:map-marker-path" className="text-sm" />
-                    {vehicle._count.routes} rutas
-                  </span>
+                {vehicle.status === 'in_use' && vehicle.routes && vehicle.routes[0] && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 mb-3 flex items-center gap-2">
+                    <Icon icon="mdi:map-marker-path" className="text-blue-600 text-base shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-blue-500 font-medium">Ruta activa</p>
+                      <p className="text-sm text-blue-800 font-semibold truncate">{vehicle.routes[0].name}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="text-xs text-gray-500 mb-4">
                   <span className="flex items-center gap-1">
                     <Icon icon="mdi:package-variant-closed" className="text-sm" />
-                    {vehicle._count.orders} órdenes
+                    {vehicle._count.orders} órdenes asignadas
                   </span>
                 </div>
 
@@ -253,21 +250,33 @@ export default function VehiclesPage() {
                   <p className="text-xs text-gray-500 bg-gray-50 px-3 py-2 rounded-lg mb-3 line-clamp-2">{vehicle.notes}</p>
                 )}
 
-                <div className="flex gap-2 pt-2 border-t">
-                  <button
-                    onClick={() => handleEdit(vehicle)}
-                    className="flex-1 flex items-center justify-center gap-1 text-sm text-blue-600 hover:bg-blue-50 py-2 rounded-xl transition-colors font-medium"
-                  >
-                    <Icon icon="mdi:pencil-outline" className="text-base" />
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => deleteMutation.mutate(vehicle.id)}
-                    className="flex-1 flex items-center justify-center gap-1 text-sm text-red-500 hover:bg-red-50 py-2 rounded-xl transition-colors font-medium"
-                  >
-                    <Icon icon="mdi:trash-can-outline" className="text-base" />
-                    Eliminar
-                  </button>
+                <div className="flex flex-col gap-2 pt-2 border-t">
+                  {vehicle.status === 'in_use' && (
+                    <button
+                      onClick={() => markAvailableMutation.mutate(vehicle.id)}
+                      disabled={markAvailableMutation.isPending}
+                      className="flex items-center justify-center gap-1 text-sm text-green-600 hover:bg-green-50 py-2 rounded-xl transition-colors font-medium border border-green-200 disabled:opacity-50"
+                    >
+                      <Icon icon="mdi:check-circle-outline" className="text-base" />
+                      Marcar disponible
+                    </button>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleEdit(vehicle)}
+                      className="flex-1 flex items-center justify-center gap-1 text-sm text-blue-600 hover:bg-blue-50 py-2 rounded-xl transition-colors font-medium"
+                    >
+                      <Icon icon="mdi:pencil-outline" className="text-base" />
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => deleteMutation.mutate(vehicle.id)}
+                      className="flex-1 flex items-center justify-center gap-1 text-sm text-red-500 hover:bg-red-50 py-2 rounded-xl transition-colors font-medium"
+                    >
+                      <Icon icon="mdi:trash-can-outline" className="text-base" />
+                      Eliminar
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -347,46 +356,8 @@ export default function VehiclesPage() {
                 </div>
               </div>
 
-              <div className="bg-blue-50 rounded-xl p-4 space-y-3">
-                <p className="text-sm font-semibold text-gray-700 flex items-center gap-1">
-                  <Icon icon="mdi:currency-usd" className="text-primary" />
-                  Tarifas (usadas para calcular el costo de la entrega)
-                </p>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Tarifa base ($)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={form.baseFee}
-                      onChange={(e) => setForm({ ...form, baseFee: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Por km ($)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={form.costPerKm}
-                      onChange={(e) => setForm({ ...form, costPerKm: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Por kg ($)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={form.costPerKg}
-                      onChange={(e) => setForm({ ...form, costPerKg: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    />
-                  </div>
-                </div>
+              <div className="bg-blue-50 rounded-xl p-3 text-xs text-blue-700">
+                💡 Las tarifas de precios se configuran globalmente en <strong>Configuración</strong>.
               </div>
 
               <div>

@@ -7,6 +7,275 @@ import { Icon } from '@iconify/react'
 interface Order {
   id: string
   customerName: string
+  operationNumber?: string | null
+  address: string
+  endAddress?: string | null
+  weight: number
+  status: string
+  lat?: number | null
+  lng?: number | null
+  endLat?: number | null
+  endLng?: number | null
+  stopOrder?: number | null
+  tripLeg?: string | null
+  price?: number | null
+  notes?: string | null
+}
+
+interface Route {
+  id: string
+  name: string
+  status: string
+  totalDistance: number
+  originLat?: number | null
+  originLng?: number | null
+  originAddress?: string | null
+  orders: Order[]
+}
+
+export default function DriverPage({ params }: { params: Promise<{ routeId: string }> }) {
+  const [route, setRoute] = useState<Route | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [token, setToken] = useState('')
+  const [error, setError] = useState('')
+  const [deliveryError, setDeliveryError] = useState('')
+  const [routeId, setRouteId] = useState('')
+
+  useEffect(() => {
+    params.then(({ routeId: rid }) => setRouteId(rid))
+  }, [params])
+
+  useEffect(() => {
+    if (!routeId) return
+    const t = localStorage.getItem('token') || ''
+    setToken(t)
+
+    const fetchRoute = async () => {
+      try {
+        const res = await axios.get(`/api/routes/${routeId}`, {
+          headers: { Authorization: `Bearer ${t}` }
+        })
+        setRoute(res.data)
+      } catch {
+        setError('Ruta no encontrada o acceso denegado')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchRoute()
+  }, [routeId])
+
+  const markDelivered = async (orderId: string) => {
+    try {
+      await axios.patch(`/api/orders/${orderId}`, { status: 'delivered' }, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setRoute((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          orders: prev.orders.map((o) =>
+            o.id === orderId ? { ...o, status: 'delivered' } : o
+          )
+        }
+      })
+    } catch {
+      setDeliveryError('Error al actualizar. Inténtalo de nuevo.')
+      setTimeout(() => setDeliveryError(''), 4000)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <Icon icon="mdi:truck-delivery" className="text-5xl text-primary mx-auto" />
+          <p className="text-gray-500 mt-2">Cargando ruta...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !route) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <Icon icon="mdi:close-circle" className="text-5xl text-red-500 mx-auto" />
+          <p className="text-red-500 mt-2">{error || 'Ruta no encontrada'}</p>
+        </div>
+      </div>
+    )
+  }
+
+  const sortedOrders = [...route.orders].sort(
+    (a, b) => (a.stopOrder || 0) - (b.stopOrder || 0)
+  )
+  const outboundOrders = sortedOrders.filter((o) => o.tripLeg === 'outbound' || !o.tripLeg)
+  const returnOrders = sortedOrders.filter((o) => o.tripLeg === 'return')
+  const delivered = sortedOrders.filter((o) => o.status === 'delivered').length
+  const total = sortedOrders.length
+  const hasReturnOrders = returnOrders.length > 0
+
+  const orderCard = (order: Order, idx: number, legColor: string) => (
+    <div
+      key={order.id}
+      className={`bg-white rounded-2xl p-4 shadow-sm border-l-4 ${
+        order.status === 'delivered' ? 'border-green-500 opacity-75' : legColor
+      }`}
+    >
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${
+            order.status === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+          }`}>
+            {idx + 1}
+          </span>
+          <div>
+            <p className="font-semibold text-gray-800">{order.customerName}</p>
+            {order.operationNumber && (
+              <p className="text-xs text-gray-400">Op. {order.operationNumber}</p>
+            )}
+            <p className="text-xs text-gray-500">{order.weight} kg</p>
+          </div>
+        </div>
+        {order.price != null && (
+          <span className="text-sm font-medium text-gray-600">${order.price.toFixed(2)}</span>
+        )}
+      </div>
+
+      <p className="text-sm text-gray-600 mb-3">{order.endAddress || order.address}</p>
+
+      {order.notes && (
+        <p className="text-xs text-amber-600 bg-amber-50 px-3 py-1 rounded-lg mb-3 flex items-center gap-1">
+          <Icon icon="mdi:note-text-outline" className="text-sm" /> {order.notes}
+        </p>
+      )}
+
+      <div className="flex gap-2">
+        {(order.endLat || order.lat) && (order.endLng || order.lng) && (
+          <a
+            href={`https://www.google.com/maps/dir/?api=1&destination=${order.endLat ?? order.lat},${order.endLng ?? order.lng}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 bg-blue-50 text-blue-700 py-2 rounded-xl text-sm font-medium text-center hover:bg-blue-100 flex items-center justify-center gap-1"
+          >
+            <Icon icon="mdi:navigation-variant" className="text-base" /> Navegar
+          </a>
+        )}
+
+        {order.status !== 'delivered' ? (
+          <button
+            onClick={() => markDelivered(order.id)}
+            className="flex-1 bg-green-500 text-white py-2 rounded-xl text-sm font-medium hover:bg-green-600"
+          >
+            ✓ Entregado
+          </button>
+        ) : (
+          <div className="flex-1 bg-green-100 text-green-700 py-2 rounded-xl text-sm font-medium text-center flex items-center justify-center gap-1">
+            <Icon icon="mdi:check-circle" className="text-base" /> Entregado
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="bg-primary text-white p-4 sticky top-0 z-10">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="font-bold text-lg flex items-center gap-2">
+              <Icon icon="mdi:truck-delivery" className="text-xl" /> Vista Conductor
+            </h1>
+            <p className="text-blue-100 text-sm">{route.name}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-bold">{delivered}/{total}</p>
+            <p className="text-blue-100 text-xs">Entregadas</p>
+          </div>
+        </div>
+        <div className="mt-3 bg-blue-700 rounded-full h-2">
+          <div
+            className="bg-white rounded-full h-2 transition-all"
+            style={{ width: `${total > 0 ? (delivered / total) * 100 : 0}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="p-4 space-y-3">
+        {deliveryError && (
+          <div className="bg-red-50 text-red-600 px-4 py-3 rounded-xl text-sm">
+            {deliveryError}
+          </div>
+        )}
+
+        {/* Outbound leg */}
+        {outboundOrders.length > 0 && (
+          <div>
+            <div className="flex items-center gap-2 mb-2 px-1">
+              <span className="w-3 h-3 rounded-full bg-blue-600 flex-shrink-0" />
+              <p className="text-sm font-semibold text-gray-700">Tramo de Salida ({outboundOrders.length} paradas)</p>
+            </div>
+            <div className="space-y-3">
+              {outboundOrders.map((order, idx) => orderCard(order, idx, 'border-blue-500'))}
+            </div>
+          </div>
+        )}
+
+        {/* Return leg */}
+        {returnOrders.length > 0 && (
+          <div>
+            <div className="flex items-center gap-2 mb-2 px-1 mt-4">
+              <span className="w-3 h-3 rounded-full bg-orange-500 flex-shrink-0" />
+              <p className="text-sm font-semibold text-gray-700">Tramo de Retorno ({returnOrders.length} paradas)</p>
+            </div>
+            <div className="space-y-3">
+              {returnOrders.map((order, idx) => orderCard(order, idx, 'border-orange-400'))}
+            </div>
+          </div>
+        )}
+
+        {/* Return to depot button (only if no return orders) */}
+        {!hasReturnOrders && route.originLat && route.originLng && (
+          <a
+            href={`https://www.google.com/maps/dir/?api=1&destination=${route.originLat},${route.originLng}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-4 w-full bg-orange-500 text-white py-3 rounded-2xl font-semibold text-center flex items-center justify-center gap-2 hover:bg-orange-600 shadow-md"
+          >
+            <Icon icon="mdi:home-map-marker" className="text-xl" />
+            Retorno al depósito
+            {route.originAddress && (
+              <span className="text-orange-100 text-xs font-normal ml-1">({route.originAddress})</span>
+            )}
+          </a>
+        )}
+
+        {sortedOrders.length === 0 && (
+          <div className="text-center py-12 text-gray-500">No hay paradas en esta ruta</div>
+        )}
+      </div>
+
+      <div className="p-4">
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">Distancia Total</span>
+            <span className="font-semibold">{route.totalDistance.toFixed(1)} km</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+import { useState, useEffect } from 'react'
+import axios from 'axios'
+import { Icon } from '@iconify/react'
+
+interface Order {
+  id: string
+  customerName: string
   address: string
   weight: number
   status: string

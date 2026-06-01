@@ -5,11 +5,11 @@ export interface PricingConfig {
 }
 
 export function calculateOrderPrice(
-  distanceKm: number,
+  segmentKm: number,
   weightKg: number,
   config: PricingConfig
 ): number {
-  return config.baseFee + distanceKm * config.costPerKm + weightKg * config.costPerKg
+  return config.baseFee + segmentKm * 2 * config.costPerKm + weightKg * config.costPerKg
 }
 
 export function haversineDistance(
@@ -29,15 +29,16 @@ export function haversineDistance(
 }
 
 export function greedyRouteOptimization(
+  origin: { lat: number; lng: number },
   stops: Array<{ id: string; lat: number; lng: number }>
 ): string[] {
-  if (stops.length <= 1) return stops.map((s) => s.id)
+  if (stops.length === 0) return []
+  if (stops.length === 1) return [stops[0].id]
 
   const unvisited = [...stops]
   const route: string[] = []
 
-  let current = unvisited.shift()!
-  route.push(current.id)
+  let current: { lat: number; lng: number } = origin
 
   while (unvisited.length > 0) {
     let nearestIdx = 0
@@ -55,8 +56,26 @@ export function greedyRouteOptimization(
     }
 
     current = unvisited.splice(nearestIdx, 1)[0]
-    route.push(current.id)
+    route.push((current as { id: string; lat: number; lng: number }).id)
   }
 
   return route
+}
+
+/**
+ * Returns per-segment km distances for an ordered list of stops,
+ * starting from the origin. Each element corresponds to the distance
+ * from the previous point (origin or prior stop) to that stop.
+ */
+export function calculateRouteSegments(
+  origin: { lat: number; lng: number },
+  orderedStops: Array<{ lat: number; lng: number }>
+): number[] {
+  const segments: number[] = []
+  let prev = origin
+  for (const stop of orderedStops) {
+    segments.push(haversineDistance(prev.lat, prev.lng, stop.lat, stop.lng))
+    prev = stop
+  }
+  return segments
 }

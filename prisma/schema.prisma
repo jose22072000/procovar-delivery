@@ -25,9 +25,6 @@ model Vehicle {
   type      String   @default("truck")
   plate     String?
   capacity  Float    @default(1000)
-  baseFee   Float    @default(5.0)
-  costPerKm Float    @default(1.5)
-  costPerKg Float    @default(0.5)
   status    String   @default("available")
   notes     String?
   userId    String
@@ -40,32 +37,32 @@ model Vehicle {
 }
 
 model Order {
-  id           String    @id @default(cuid())
-  customerName String
-  address      String
-  startAddress String?
-  endAddress   String?
-  startLat     Float?
-  startLng     Float?
-  endLat       Float?
-  endLng       Float?
-  lat          Float?
-  lng          Float?
-  weight       Float     @default(1)
-  status       String    @default("pending")
-  notes        String?
-  routeId      String?
-  route        Route?    @relation(fields: [routeId], references: [id])
-  vehicleId    String?
-  vehicle      Vehicle?  @relation(fields: [vehicleId], references: [id])
-  userId       String
-  user         User      @relation(fields: [userId], references: [id])
-  price        Float?
+  id              String    @id @default(cuid())
+  operationNumber String?
+  customerName    String
+  address         String
+  endAddress      String?
+  endLat          Float?
+  endLng          Float?
+  lat             Float?
+  lng             Float?
+  weight          Float     @default(1)
+  status          String    @default("pending")
+  tripLeg         String    @default("outbound")
+  notes           String?
+  routeId         String?
+  route           Route?    @relation(fields: [routeId], references: [id])
+  vehicleId       String?
+  vehicle         Vehicle?  @relation(fields: [vehicleId], references: [id])
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  price           Float?
+  segmentKm       Float?
   vehicleAssignments OrderVehicle[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  stopOrder    Int?
-  deliveredAt  DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  stopOrder       Int?
+  deliveredAt     DateTime?
 }
 
 model OrderVehicle {
@@ -81,20 +78,23 @@ model OrderVehicle {
 }
 
 model Route {
-  id            String   @id @default(cuid())
-  name          String
-  status        String   @default("planned")
-  totalDistance Float    @default(0)
-  totalWeight   Float    @default(0)
-  totalPrice    Float    @default(0)
-  orders        Order[]
-  vehicleId     String?
-  vehicle       Vehicle? @relation(fields: [vehicleId], references: [id])
-  userId        String
-  user          User     @relation(fields: [userId], references: [id])
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  optimized     Boolean  @default(false)
+  id              String   @id @default(cuid())
+  name            String
+  status          String   @default("planned")
+  originAddress   String?
+  originLat       Float?
+  originLng       Float?
+  totalDistance   Float    @default(0)
+  totalWeight     Float    @default(0)
+  totalPrice      Float    @default(0)
+  orders          Order[]
+  vehicleId       String?
+  vehicle         Vehicle? @relation(fields: [vehicleId], references: [id])
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  optimized       Boolean  @default(false)
 }
 
 model Settings {

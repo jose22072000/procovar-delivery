@@ -12,7 +12,13 @@ export async function GET(req: NextRequest) {
     where: { userId: user.id as string },
     orderBy: { createdAt: 'desc' },
     include: {
-      _count: { select: { routes: true, orders: true, orderAssignments: true } }
+      _count: { select: { routes: true, orders: true, orderAssignments: true } },
+      routes: {
+        where: { status: { not: 'completed' } },
+        select: { id: true, name: true, status: true },
+        take: 1,
+        orderBy: { createdAt: 'desc' },
+      }
     }
   })
 
