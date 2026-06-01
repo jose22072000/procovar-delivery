@@ -8,15 +8,27 @@ datasource db {
 }
 
 model User {
-  id        String    @id @default(cuid())
-  email     String    @unique
-  password  String
+  id           String        @id @default(cuid())
+  email        String        @unique
+  password     String
+  name         String
+  role         String        @default("admin")
+  createdAt    DateTime      @default(now())
+  orders       Order[]
+  routes       Route[]
+  vehicles     Vehicle[]
+  savedOrigins SavedOrigin[]
+}
+
+model SavedOrigin {
+  id        String   @id @default(cuid())
   name      String
-  role      String    @default("admin")
-  createdAt DateTime  @default(now())
-  orders    Order[]
-  routes    Route[]
-  vehicles  Vehicle[]
+  address   String
+  lat       Float
+  lng       Float
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
 }
 
 model Vehicle {
@@ -79,7 +91,8 @@ model OrderVehicle {
 
 model Route {
   id              String   @id @default(cuid())
-  name            String
+  name            String?
+  routeCode       String?
   status          String   @default("planned")
   originAddress   String?
   originLat       Float?

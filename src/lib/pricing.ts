@@ -63,9 +63,8 @@ export function greedyRouteOptimization(
 }
 
 /**
- * Returns per-segment km distances for an ordered list of stops,
- * starting from the origin. Each element corresponds to the distance
- * from the previous point (origin or prior stop) to that stop.
+ * Returns the actual driving distances between consecutive stops (origin → stop1 → stop2 → ...).
+ * Used only for route totalDistance (km reales del camión).
  */
 export function calculateRouteSegments(
   origin: { lat: number; lng: number },
@@ -78,4 +77,16 @@ export function calculateRouteSegments(
     prev = stop
   }
   return segments
+}
+
+/**
+ * Returns the distance from the origin to each stop individually (not cumulative).
+ * Used for per-client pricing: each client pays based on how far they are from the depot,
+ * regardless of route order.
+ */
+export function calculateClientDistances(
+  origin: { lat: number; lng: number },
+  stops: Array<{ lat: number; lng: number }>
+): number[] {
+  return stops.map((stop) => haversineDistance(origin.lat, origin.lng, stop.lat, stop.lng))
 }

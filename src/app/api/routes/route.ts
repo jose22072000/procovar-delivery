@@ -1,9 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
-import { greedyRouteOptimization, calculateRouteSegments, calculateOrderPrice } from '@/lib/pricing'
+import { greedyRouteOptimization, calculateRouteSegments, calculateClientDistances, calculateOrderPrice } from '@/lib/pricing'
 
 export const dynamic = 'force-dynamic'
+
+async function generateRouteCode(): Promise<string> {
+  const today = new Date()
+  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '')
+  const prefix = `RT-${dateStr}-`
+
+  const count = await prisma.route.count({
+    where: { routeCode: { startsWith: prefix } },
+  })
+
+  const seq = String(count + 1).padStart(3, '0')
+  return `${prefix}${seq}`
+}
 
 export async function GET(req: NextRequest) {
   const user = getUserFromRequest(req)
@@ -13,7 +26,7 @@ export async function GET(req: NextRequest) {
     where: { userId: user.id as string },
     orderBy: { createdAt: 'desc' },
     include: {
-      vehicle: { select: { id: true, name: true, type: true, plate: true } },
+      vehicle: { select: { id: true, name: true, type: true, plate: true, capacity: true } },
       orders: {
         orderBy: { stopOrder: 'asc' },
         select: {
@@ -54,17 +67,13 @@ export async function POST(req: NextRequest) {
     returnOrderIds = [],
   } = await req.json()
 
-  if (!name) {
-    return NextResponse.json({ error: 'Route name is required' }, { status: 400 })
-  }
-
   if (!originLat || !originLng) {
-    return NextResponse.json({ error: 'Origin coordinates are required' }, { status: 400 })
+    return NextResponse.json({ error: 'Las coordenadas de origen son requeridas' }, { status: 400 })
   }
 
   const allOrderIds = [...outboundOrderIds, ...returnOrderIds]
   if (allOrderIds.length === 0) {
-    return NextResponse.json({ error: 'At least one order is required' }, { status: 400 })
+    return NextResponse.json({ error: 'Se requiere al menos un pedido' }, { status: 400 })
   }
 
   // Load global pricing settings
@@ -80,30 +89,42 @@ export async function POST(req: NextRequest) {
     costPerKg: settings.costPerKg,
   }
 
+  // Validate vehicle capacity
+  if (vehicleId) {
+    const vehicle = await prisma.vehicle.findFirst({ where: { id: vehicleId } })
+    const orders = await prisma.order.findMany({ where: { id: { in: allOrderIds } } })
+    const totalWeight = orders.reduce((sum, o) => sum + o.weight, 0)
+    if (vehicle && totalWeight > vehicle.capacity) {
+      return NextResponse.json({
+        error: `Peso total (${totalWeight.toFixed(1)} kg) supera la capacidad del vehículo (${vehicle.capacity} kg)`
+      }, { status: 400 })
+    }
+  }
+
   const origin = { lat: originLat, lng: originLng }
 
-  // Load outbound orders
   const outboundOrders = outboundOrderIds.length > 0
     ? await prisma.order.findMany({ where: { id: { in: outboundOrderIds }, userId: user.id as string } })
     : []
 
   if (outboundOrders.length !== outboundOrderIds.length) {
-    return NextResponse.json({ error: 'One or more outbound orders not found' }, { status: 404 })
+    return NextResponse.json({ error: 'Uno o más pedidos de salida no encontrados' }, { status: 404 })
   }
 
-  // Load return orders
   const returnOrders = returnOrderIds.length > 0
     ? await prisma.order.findMany({ where: { id: { in: returnOrderIds }, userId: user.id as string } })
     : []
 
   if (returnOrders.length !== returnOrderIds.length) {
-    return NextResponse.json({ error: 'One or more return orders not found' }, { status: 404 })
+    return NextResponse.json({ error: 'Uno o más pedidos de retorno no encontrados' }, { status: 404 })
   }
 
-  // Create the route
+  const routeCode = await generateRouteCode()
+
   const route = await prisma.route.create({
     data: {
-      name,
+      name: name || null,
+      routeCode,
       userId: user.id as string,
       ...(vehicleId && { vehicleId }),
       originAddress: originAddress ?? null,
@@ -116,7 +137,6 @@ export async function POST(req: NextRequest) {
   let totalWeight = 0
   let totalPrice = 0
 
-  // Helper: assign stops for a given leg
   async function assignStops(
     orders: typeof outboundOrders,
     tripLeg: string,
@@ -136,15 +156,18 @@ export async function POST(req: NextRequest) {
       return { id: o.id, lat: (o.endLat ?? o.lat)!, lng: (o.endLng ?? o.lng)! }
     })
 
-    const segments = calculateRouteSegments(origin, orderedStops)
+    // Actual driving distance (for totalDistance on route)
+    const drivingSegments = calculateRouteSegments(origin, orderedStops)
+    // Per-client distance from origin (for pricing)
+    const clientDistances = calculateClientDistances(origin, orderedStops)
 
     for (let i = 0; i < optimizedIds.length; i++) {
       const orderId = optimizedIds[i]
       const order = ordersMap[orderId]
-      const segmentKm = segments[i] ?? 0
+      const segmentKm = clientDistances[i] ?? 0
       const price = calculateOrderPrice(segmentKm, order.weight, config)
 
-      totalDistance += segmentKm
+      totalDistance += drivingSegments[i] ?? 0
       totalWeight += order.weight
       totalPrice += price
 
@@ -176,7 +199,6 @@ export async function POST(req: NextRequest) {
     }
   })
 
-  // Auto-disable vehicle when assigned to route
   if (vehicleId) {
     await prisma.vehicle.update({
       where: { id: vehicleId },
@@ -187,13 +209,10 @@ export async function POST(req: NextRequest) {
   const fullRoute = await prisma.route.findUnique({
     where: { id: route.id },
     include: {
-      vehicle: { select: { id: true, name: true, type: true, plate: true } },
+      vehicle: { select: { id: true, name: true, type: true, plate: true, capacity: true } },
       orders: { orderBy: { stopOrder: 'asc' } }
     }
   })
 
   return NextResponse.json(fullRoute, { status: 201 })
 }
-
-
-

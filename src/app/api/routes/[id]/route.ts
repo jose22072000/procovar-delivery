@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
-import { greedyRouteOptimization, calculateRouteSegments, calculateOrderPrice } from '@/lib/pricing'
+import { greedyRouteOptimization, calculateRouteSegments, calculateClientDistances, calculateOrderPrice } from '@/lib/pricing'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,13 +13,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const route = await prisma.route.findFirst({
     where: { id, userId: user.id as string },
     include: {
-      orders: {
-        orderBy: { stopOrder: 'asc' }
-      }
+      orders: { orderBy: { stopOrder: 'asc' } }
     }
   })
 
-  if (!route) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!route) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
   return NextResponse.json(route)
 }
 
@@ -32,20 +30,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const route = await prisma.route.findFirst({
     where: { id, userId: user.id as string },
-    include: { orders: { orderBy: { stopOrder: 'asc' } } }
+    include: { orders: { orderBy: { stopOrder: 'asc' } }, vehicle: true }
   })
-  if (!route) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!route) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
+
+  const routeOrders = route.orders
 
   // --- Vehicle assignment (auto-enable/disable) ---
   if (data.vehicleId !== undefined) {
-    // Re-enable old vehicle if it was in_use due to this route
     if (route.vehicleId && route.vehicleId !== data.vehicleId) {
       const oldVehicle = await prisma.vehicle.findFirst({ where: { id: route.vehicleId } })
       if (oldVehicle?.status === 'in_use') {
         await prisma.vehicle.update({ where: { id: route.vehicleId }, data: { status: 'available' } })
       }
     }
-    // Disable new vehicle
     if (data.vehicleId) {
       await prisma.vehicle.update({ where: { id: data.vehicleId }, data: { status: 'in_use' } })
     }
@@ -56,7 +54,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         ...(data.name !== undefined && { name: data.name }),
         ...(data.status !== undefined && { status: data.status }),
       },
-      include: { vehicle: { select: { id: true, name: true, type: true, plate: true } } }
+      include: { vehicle: { select: { id: true, name: true, type: true, plate: true, capacity: true } } }
     })
     return NextResponse.json(simpleUpdate)
   }
@@ -73,30 +71,39 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const config = { baseFee: settings.baseFee, costPerKm: settings.costPerKm, costPerKg: settings.costPerKg }
     const origin = { lat: route.originLat ?? 0, lng: route.originLng ?? 0 }
 
-    // Validate new orders belong to user and are unassigned
     const allNewIds = [...addOutboundIds, ...addReturnIds]
     if (allNewIds.length > 0) {
       const newOrders = await prisma.order.findMany({
         where: { id: { in: allNewIds }, userId: user.id as string }
       })
       if (newOrders.length !== allNewIds.length) {
-        return NextResponse.json({ error: 'One or more orders not found' }, { status: 404 })
+        return NextResponse.json({ error: 'Uno o más pedidos no encontrados' }, { status: 404 })
+      }
+
+      // Validate capacity if vehicle assigned
+      const assignedVehicle = route.vehicle
+      if (route.vehicleId && assignedVehicle) {
+        const newWeight = newOrders.reduce((sum, o) => sum + o.weight, 0)
+        const existingWeight = route.orders.reduce((sum, o) => sum + o.weight, 0)
+        const totalWeight = existingWeight + newWeight
+        if (totalWeight > assignedVehicle.capacity) {
+          return NextResponse.json({
+            error: `Peso total (${totalWeight.toFixed(1)} kg) supera la capacidad del vehículo (${assignedVehicle.capacity} kg)`
+          }, { status: 400 })
+        }
       }
     }
 
-    // Helper: re-optimize an entire leg
     async function reOptimizeLeg(
-      existingOrders: typeof route.orders,
+      existingOrders: typeof routeOrders,
       newOrderIds: string[],
       leg: string,
       stopOffset: number
     ) {
-      // Load new order details
       const newDbOrders = newOrderIds.length > 0
         ? await prisma.order.findMany({ where: { id: { in: newOrderIds } } })
         : []
 
-      // Combine all orders for this leg
       const allOrders = [...existingOrders, ...newDbOrders]
       if (allOrders.length === 0) return { distance: 0, weight: 0, price: 0, count: 0 }
 
@@ -113,16 +120,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         const o = ordersMap[oid]
         return { id: o.id, lat: (o.endLat ?? o.lat)!, lng: (o.endLng ?? o.lng)! }
       })
-      const segments = calculateRouteSegments(origin, orderedStops)
+
+      const drivingSegments = calculateRouteSegments(origin, orderedStops)
+      const clientDistances = calculateClientDistances(origin, orderedStops)
 
       let distance = 0, weight = 0, totalPriceLocal = 0
 
       for (let i = 0; i < optimizedIds.length; i++) {
         const oid = optimizedIds[i]
         const order = ordersMap[oid]
-        const segmentKm = segments[i] ?? 0
+        const segmentKm = clientDistances[i] ?? 0
         const price = calculateOrderPrice(segmentKm, order.weight, config)
-        distance += segmentKm
+        distance += drivingSegments[i] ?? 0
         weight += order.weight
         totalPriceLocal += price
 
@@ -147,12 +156,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     let totalPrice = 0
 
     if (addOutboundIds.length > 0) {
-      // Re-optimize full outbound leg
       const result = await reOptimizeLeg(existingOutbound, addOutboundIds, 'outbound', 0)
       totalDistance += result.distance
       totalWeight += result.weight
       totalPrice += result.price
-      // Keep existing return totals as-is
       route.orders
         .filter((o) => o.tripLeg === 'return')
         .forEach((o) => {
@@ -160,7 +167,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           totalWeight += o.weight
           totalPrice += o.price ?? 0
         })
-      // Re-sequence return stops after outbound count
       const newOutboundCount = existingOutbound.length + addOutboundIds.length
       let returnIdx = 0
       for (const o of route.orders.filter((x) => x.tripLeg === 'return').sort((a, b) => (a.stopOrder ?? 0) - (b.stopOrder ?? 0))) {
@@ -168,7 +174,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         returnIdx++
       }
     } else {
-      // Re-optimize full return leg; keep existing outbound totals
       route.orders
         .filter((o) => o.tripLeg !== 'return')
         .forEach((o) => {
@@ -216,9 +221,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const route = await prisma.route.findFirst({
     where: { id, userId: user.id as string }
   })
-  if (!route) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!route) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
 
-  // Re-enable vehicle if it was in_use because of this route
   if (route.vehicleId) {
     const vehicle = await prisma.vehicle.findFirst({ where: { id: route.vehicleId } })
     if (vehicle?.status === 'in_use') {
@@ -234,4 +238,3 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   await prisma.route.delete({ where: { id } })
   return NextResponse.json({ success: true })
 }
-
