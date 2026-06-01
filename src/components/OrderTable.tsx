@@ -20,6 +20,7 @@ interface Order {
 
 interface OrderTableProps {
   orders: Order[]
+  cupRate?: number
   onEdit?: (order: Order) => void
   onDelete?: (id: string) => void
   onViewMap?: (order: Order) => void
@@ -29,7 +30,7 @@ function hasCoords(order: Order): boolean {
   return !!((order.endLat || order.lat) && (order.endLng || order.lng))
 }
 
-export default function OrderTable({ orders, onEdit, onDelete, onViewMap }: OrderTableProps) {
+export default function OrderTable({ orders, cupRate = 320, onEdit, onDelete, onViewMap }: OrderTableProps) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -54,9 +55,14 @@ export default function OrderTable({ orders, onEdit, onDelete, onViewMap }: Orde
               </td>
               <td className="py-3 px-4 text-gray-600">{order.weight} kg</td>
               <td className="py-3 px-4">
-                {order.price != null
-                  ? <span className="font-semibold text-green-700">${order.price.toFixed(2)}</span>
-                  : <span className="text-gray-400">—</span>}
+                {order.price != null ? (
+                  <div>
+                    <span className="font-semibold text-green-700">${order.price.toFixed(2)} USD</span>
+                    <p className="text-xs text-yellow-600">{Math.round(order.price * cupRate).toLocaleString('es-ES')} CUP</p>
+                  </div>
+                ) : (
+                  <span className="text-gray-400 text-xs">Se calcula al asignar ruta</span>
+                )}
               </td>
               <td className="py-3 px-4 text-gray-500 text-xs whitespace-nowrap">
                 {new Date(order.createdAt).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}
@@ -72,7 +78,7 @@ export default function OrderTable({ orders, onEdit, onDelete, onViewMap }: Orde
                         <Icon icon="mdi:map-marker-path" className="text-base" />
                       </button>
                       <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block bg-gray-800 text-white text-xs rounded-lg px-2 py-1 whitespace-nowrap z-20 shadow-lg">
-                        Ver ruta en mapa
+                        Ver en mapa
                         <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
                       </div>
                     </div>

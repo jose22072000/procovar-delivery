@@ -96,6 +96,16 @@ export default function RoutesPage() {
   const [historyTab, setHistoryTab] = useState<'active' | 'history'>('active')
   const [apiError, setApiError] = useState('')
 
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: async () => {
+      const res = await axios.get('/api/settings', { headers: { Authorization: `Bearer ${token}` } })
+      return res.data as { cupRate: number }
+    },
+    enabled: !!token,
+  })
+  const cupRate: number = settings?.cupRate ?? 320
+
   const { data: routes = [] } = useQuery({
     queryKey: ['routes'],
     queryFn: async () => {
@@ -468,16 +478,11 @@ export default function RoutesPage() {
                     </div>
                   </div>
                   <div className="flex items-center justify-between mt-3">
-                    <span className="text-sm font-bold text-primary">${route.totalPrice.toFixed(2)}</span>
+                    <div>
+                      <span className="text-sm font-bold text-primary">${route.totalPrice.toFixed(2)} USD</span>
+                      <p className="text-xs text-yellow-600 font-medium">{Math.round(route.totalPrice * cupRate).toLocaleString('es-ES')} CUP</p>
+                    </div>
                     <div className="flex gap-3">
-                      <a
-                        href={`/driver/${route.id}`}
-                        target="_blank"
-                        className="text-xs text-blue-600 hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        Vista conductor →
-                      </a>
                       {route.status !== 'completed' && (
                         <button
                           onClick={(e) => { e.stopPropagation(); deleteRoute.mutate(route.id) }}
@@ -520,7 +525,8 @@ export default function RoutesPage() {
                   <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-3">
                     <span>🛣️ {selectedRoute.totalDistance.toFixed(1)} km</span>
                     <span>⚖️ {selectedRoute.totalWeight.toFixed(1)} kg</span>
-                    <span className="font-semibold text-primary">💰 ${selectedRoute.totalPrice.toFixed(2)}</span>
+                    <span className="font-semibold text-primary">💰 ${selectedRoute.totalPrice.toFixed(2)} USD</span>
+                    <span className="font-semibold text-yellow-600">≈ {Math.round(selectedRoute.totalPrice * cupRate).toLocaleString('es-ES')} CUP</span>
                     {selectedRoute.vehicle && (
                       <span>🚛 {selectedRoute.vehicle.name}{selectedRoute.vehicle.plate ? ` · ${selectedRoute.vehicle.plate}` : ''}</span>
                     )}
@@ -570,7 +576,10 @@ export default function RoutesPage() {
                               <p className="text-xs text-gray-500">{order.segmentKm.toFixed(1)} km desde origen</p>
                             )}
                             {order.price != null && (
-                              <p className="text-xs font-semibold text-blue-700">${order.price.toFixed(2)}</p>
+                              <>
+                                <p className="text-xs font-semibold text-blue-700">${order.price.toFixed(2)} USD</p>
+                                <p className="text-xs text-yellow-600">{Math.round(order.price * cupRate).toLocaleString('es-ES')} CUP</p>
+                              </>
                             )}
                           </div>
                           <span className={`text-xs px-2 py-1 rounded-full shrink-0 ${statusBadge(order.status)}`}>
@@ -607,7 +616,10 @@ export default function RoutesPage() {
                               <p className="text-xs text-gray-500">{order.segmentKm.toFixed(1)} km desde origen</p>
                             )}
                             {order.price != null && (
-                              <p className="text-xs font-semibold text-orange-700">${order.price.toFixed(2)}</p>
+                              <>
+                                <p className="text-xs font-semibold text-orange-700">${order.price.toFixed(2)} USD</p>
+                                <p className="text-xs text-yellow-600">{Math.round(order.price * cupRate).toLocaleString('es-ES')} CUP</p>
+                              </>
                             )}
                           </div>
                           <span className={`text-xs px-2 py-1 rounded-full shrink-0 ${statusBadge(order.status)}`}>

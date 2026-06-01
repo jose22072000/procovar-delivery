@@ -91,6 +91,16 @@ export default function OrdersPage() {
   const [geocoding, setGeocoding] = useState(false)
   const endAddrTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: async () => {
+      const res = await axios.get('/api/settings', { headers: { Authorization: `Bearer ${token}` } })
+      return res.data as { cupRate: number }
+    },
+    enabled: !!token,
+  })
+  const cupRate: number = settings?.cupRate ?? 320
+
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ['orders'],
     queryFn: async () => {
@@ -265,6 +275,7 @@ export default function OrdersPage() {
           ) : (
             <OrderTable
               orders={filteredOrders}
+              cupRate={cupRate}
               onEdit={handleEdit}
               onDelete={(id) => deleteMutation.mutate(id)}
               onViewMap={(order) => setSelectedOrderForMap(order as Order)}

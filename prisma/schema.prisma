@@ -116,4 +116,6 @@ model Settings {
   costPerKm Float  @default(1.5)
   costPerKg Float  @default(0.5)
   currency  String @default("USD")
+  cupRate   Float  @default(320.0)
+  cupRateUpdatedAt DateTime @default(now())
 }
