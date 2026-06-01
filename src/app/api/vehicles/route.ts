@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   const user = getUserFromRequest(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { name, type, plate, capacity, baseFee, costPerKm, costPerKg, status, notes } = await req.json()
+  const { name, type, plate, capacity, status, notes } = await req.json()
 
   if (!name) {
     return NextResponse.json({ error: 'Vehicle name is required' }, { status: 400 })
@@ -41,9 +41,6 @@ export async function POST(req: NextRequest) {
       type: type || 'truck',
       plate: plate || null,
       capacity: capacity ?? 1000,
-      baseFee: baseFee ?? 5.0,
-      costPerKm: costPerKm ?? 1.5,
-      costPerKg: costPerKg ?? 0.5,
       status: status || 'available',
       notes: notes || null,
       userId: user.id as string,
