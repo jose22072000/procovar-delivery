@@ -90,3 +90,43 @@ export function calculateClientDistances(
 ): number[] {
   return stops.map((stop) => haversineDistance(origin.lat, origin.lng, stop.lat, stop.lng))
 }
+
+/**
+ * Segment-based fare allocation.
+ *
+ * The whole trip's distance cost is split equally among all clients (so no single
+ * client pays for the entire transport). On top of that equal share, each stop pays
+ * for the inter-stop legs accumulated to reach it — so the first stop pays only the
+ * equal share and each later stop pays progressively more.
+ *
+ *   totalDistance = depot→s1→…→sN→depot (km, incl. return)
+ *   base          = totalDistance × costPerKm / N
+ *   cumKm[i]      = Σ legs from s1 to s_i (0 for the first stop)
+ *   price[i]      = base + cumKm[i] × costPerKm
+ */
+export function computeRoutePricing(
+  origin: { lat: number; lng: number },
+  orderedStops: Array<{ lat: number; lng: number }>,
+  costPerKm: number
+): { totalDistance: number; cumKm: number[]; prices: number[] } {
+  const n = orderedStops.length
+  const segments = calculateRouteSegments(origin, orderedStops) // [depot→s1, s1→s2, …]
+
+  let totalDistance = segments.reduce((a, b) => a + b, 0)
+  if (n > 0) {
+    const last = orderedStops[n - 1]
+    totalDistance += haversineDistance(last.lat, last.lng, origin.lat, origin.lng)
+  }
+
+  const cumKm: number[] = []
+  let acc = 0
+  for (let i = 0; i < n; i++) {
+    if (i >= 1) acc += segments[i] // inter-stop leg s_{i-1}→s_i
+    cumKm.push(acc)
+  }
+
+  const base = n > 0 ? (totalDistance * costPerKm) / n : 0
+  const prices = cumKm.map((km) => base + km * costPerKm)
+
+  return { totalDistance, cumKm, prices }
+}

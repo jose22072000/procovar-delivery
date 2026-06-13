@@ -17,17 +17,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (auth.error) return auth.error
 
   const { id } = await params
-  const { name, role, password } = await req.json()
+  const { name, role, password, branchId } = await req.json()
 
   const existing = await prisma.user.findUnique({ where: { id } })
   if (!existing) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
-  const data: { name?: string; role?: string; password?: string } = {}
+  const data: { name?: string; role?: string; password?: string; branchId?: string | null } = {}
 
   if (name !== undefined) data.name = name
   if (role !== undefined) data.role = role
+  if (branchId !== undefined) data.branchId = branchId || null
   if (password) data.password = await bcrypt.hash(password, 10)
 
   const updated = await prisma.user.update({

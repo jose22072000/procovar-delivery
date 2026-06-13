@@ -230,14 +230,14 @@ export default function ReportsPage() {
                         <Icon icon="mdi:currency-usd" className="text-green-500 text-xl" />
                         <p className="text-xs font-semibold text-green-600 uppercase tracking-wide">{t('rep.totalRevenue')}</p>
                       </div>
-                      <p className="text-3xl font-bold text-gray-800">{format(summary?.totalRevenue || 0)}</p>
+                      <p className="text-3xl font-bold text-ink font-mono">{format(summary?.totalRevenue || 0)}</p>
                     </div>
                     <div className="bg-purple-50 rounded-2xl p-5 border border-purple-100">
                       <div className="flex items-center gap-2 mb-2">
                         <Icon icon="mdi:chart-line" className="text-purple-500 text-xl" />
                         <p className="text-xs font-semibold text-purple-600 uppercase tracking-wide">{t('rep.avgPrice')}</p>
                       </div>
-                      <p className="text-3xl font-bold text-gray-800">{format(summary?.avgPrice || 0)}</p>
+                      <p className="text-3xl font-bold text-ink font-mono">{format(summary?.avgPrice || 0)}</p>
                     </div>
                     <div className="bg-yellow-50 rounded-2xl p-5 border border-yellow-100">
                       <div className="flex items-center gap-2 mb-2">
@@ -263,7 +263,7 @@ export default function ReportsPage() {
                             <div className="min-w-0">
                               <p className="font-semibold text-gray-800 truncate">{v.name}</p>
                               {v.plate && <p className="text-xs text-gray-400 font-mono">{v.plate}</p>}
-                              <p className="text-sm text-green-700 font-semibold">{format(v.revenue)} · {v.count} órdenes</p>
+                              <p className="text-sm text-green-700 font-semibold">{format(v.revenue)} · {t('rep.ordersCount', { n: v.count })}</p>
                             </div>
                           </div>
                         ))}
@@ -335,7 +335,7 @@ export default function ReportsPage() {
                 orders.length === 0 ? (
                   <div className="text-center py-12 text-gray-400">
                     <Icon icon="mdi:package-variant-closed-remove" className="text-5xl mx-auto mb-3" />
-                    <p>No hay órdenes para los filtros seleccionados.</p>
+                    <p>{t('rep.noOrders')}</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto">

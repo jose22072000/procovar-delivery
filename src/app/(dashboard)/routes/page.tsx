@@ -4,6 +4,7 @@ import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import Navbar from '@/components/Navbar'
 import LocationInput, { LocationValue } from '@/components/LocationInput'
+import ProductPicker from '@/components/ProductPicker'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { useAppStore } from '@/store/useAppStore'
@@ -12,6 +13,16 @@ import { useT } from '@/lib/i18n'
 import { Icon } from '@iconify/react'
 
 const MapComponent = dynamic(() => import('@/components/MapComponent'), { ssr: false })
+
+interface OrderItem {
+  productId?: string
+  name: string
+  weight?: number
+  packaging?: string | null
+  category?: string | null
+  quantity: number
+  description?: string // legacy free-text items
+}
 
 interface RouteOrder {
   id: string
@@ -28,6 +39,7 @@ interface RouteOrder {
   price?: number | null
   stopOrder?: number | null
   segmentKm?: number | null
+  items?: OrderItem[]
 }
 
 interface Route {
@@ -41,6 +53,7 @@ interface Route {
   originAddress?: string | null
   originLat?: number | null
   originLng?: number | null
+  deliveryDate?: string | null
   orders: RouteOrder[]
   vehicleId?: string | null
   vehicle?: { id: string; name: string; type: string; plate: string | null; capacity: number } | null
@@ -70,6 +83,7 @@ interface PendingStop {
   address: string
   lat: number
   lng: number
+  items: OrderItem[]
 }
 
 const emptyLoc: LocationValue = { address: '', lat: null, lng: null }
@@ -84,15 +98,27 @@ function PedidoForm({
 }) {
   const t = useT()
   const [name, setName] = useState('')
-  const [weight, setWeight] = useState('1')
+  const [manualWeight, setManualWeight] = useState('1')
   const [loc, setLoc] = useState<LocationValue>(emptyLoc)
+  const [items, setItems] = useState<OrderItem[]>([])
 
+  const computedWeight = items.reduce((s, it) => s + (it.weight || 0) * it.quantity, 0)
+  const effectiveWeight = items.length > 0 ? computedWeight : (parseFloat(manualWeight) || 0)
   const canAdd = name.trim() !== '' && loc.lat != null && loc.lng != null
 
   const reset = () => {
     setName('')
-    setWeight('1')
+    setManualWeight('1')
     setLoc(emptyLoc)
+    setItems([])
+  }
+
+  const addProduct = (p: { id: string; name: string; weight: number; packaging?: string | null; category?: string | null }) => {
+    setItems((prev) => {
+      const existing = prev.find((x) => x.productId === p.id)
+      if (existing) return prev.map((x) => x.productId === p.id ? { ...x, quantity: x.quantity + 1 } : x)
+      return [...prev, { productId: p.id, name: p.name, weight: p.weight, packaging: p.packaging, category: p.category, quantity: 1 }]
+    })
   }
 
   return (
@@ -109,15 +135,19 @@ function PedidoForm({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t('pedido.weight')}</label>
-          <input
-            type="number"
-            step="0.1"
-            min="0"
-            value={weight}
-            onChange={(e) => setWeight(e.target.value)}
-            className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-          />
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            {items.length > 0 ? t('prod.autoWeight') : t('pedido.weight')}
+          </label>
+          {items.length > 0 ? (
+            <div className="w-full px-3 py-2 border rounded-xl text-sm bg-gray-100 text-gray-700 font-mono">{computedWeight.toFixed(2)} kg</div>
+          ) : (
+            <input
+              type="number" step="0.1" min="0"
+              value={manualWeight}
+              onChange={(e) => setManualWeight(e.target.value)}
+              className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            />
+          )}
         </div>
       </div>
 
@@ -128,6 +158,35 @@ function PedidoForm({
         markerColor={markerColor}
       />
 
+      {/* Product breakdown — search the catalog; weight auto-sums */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t('routes.items')}</label>
+        {items.length > 0 && (
+          <div className="space-y-1.5 mb-2">
+            {items.map((it, idx) => (
+              <div key={idx} className="flex items-center gap-2 bg-white border rounded-xl px-2.5 py-1.5">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{it.name}</p>
+                  <p className="text-[11px] text-gray-400 truncate">
+                    {it.packaging ? `${it.packaging} · ` : ''}{((it.weight || 0) * it.quantity).toFixed(2)} kg
+                  </p>
+                </div>
+                <input
+                  type="number" min="1"
+                  value={it.quantity}
+                  onChange={(e) => setItems(items.map((x, i) => i === idx ? { ...x, quantity: parseInt(e.target.value) || 1 } : x))}
+                  className="w-16 px-2 py-1 border rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600">
+                  <Icon icon="mdi:close" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <ProductPicker onPick={addProduct} />
+      </div>
+
       <div className="flex justify-end">
         <button
           type="button"
@@ -135,10 +194,18 @@ function PedidoForm({
           onClick={() => {
             onAdd({
               customerName: name.trim(),
-              weight: parseFloat(weight) || 1,
+              weight: effectiveWeight || 1,
               address: loc.address,
               lat: loc.lat!,
               lng: loc.lng!,
+              items: items.map((it) => ({
+                productId: it.productId,
+                name: it.name,
+                weight: it.weight,
+                packaging: it.packaging,
+                category: it.category,
+                quantity: it.quantity || 1,
+              })),
             })
             reset()
           }}
@@ -158,6 +225,7 @@ export default function RoutesPage() {
   const [showModal, setShowModal] = useState(false)
   const [routeName, setRouteName] = useState('')
   const [selectedVehicleId, setSelectedVehicleId] = useState('')
+  const [deliveryDate, setDeliveryDate] = useState('')
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
   const [apiError, setApiError] = useState('')
 
@@ -178,7 +246,7 @@ export default function RoutesPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
 
-  const [historyTab, setHistoryTab] = useState<'active' | 'history'>('active')
+  const [historyTab, setHistoryTab] = useState<'active' | 'in_progress' | 'history'>('active')
 
   const { format } = useCurrency()
   const t = useT()
@@ -250,6 +318,21 @@ export default function RoutesPage() {
     },
   })
 
+  const startRoute = useMutation({
+    mutationFn: async (routeId: string) => {
+      const res = await axios.patch(`/api/routes/${routeId}`, { status: 'in_progress' }, { headers: { Authorization: `Bearer ${token}` } })
+      return res.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['routes'] })
+      setHistoryTab('in_progress')
+    },
+    onError: (err: unknown) => {
+      const msg = axios.isAxiosError(err) ? err.response?.data?.error : 'Error al iniciar la ruta'
+      setApiError(msg || 'Error al iniciar la ruta')
+    },
+  })
+
   const completeRoute = useMutation({
     mutationFn: async (routeId: string) => {
       const res = await axios.patch(`/api/routes/${routeId}`, { status: 'completed' }, { headers: { Authorization: `Bearer ${token}` } })
@@ -281,6 +364,7 @@ export default function RoutesPage() {
     setShowModal(false)
     setRouteName('')
     setSelectedVehicleId('')
+    setDeliveryDate('')
     setDepot(emptyLoc)
     setSelectedOriginId('')
     setShowSaveOrigin(false)
@@ -311,13 +395,14 @@ export default function RoutesPage() {
   const handleCreateRoute = () => {
     if (!depotSet || !selectedVehicleId || pendingStops.length === 0) return
     if (pendingOverCapacity) {
-      setApiError(`Peso total (${pendingWeight.toFixed(1)} kg) supera la capacidad del vehículo (${selectedVehicle!.capacity} kg)`)
+      setApiError(t('routes.overCapWarn', { w: pendingWeight.toFixed(1), c: selectedVehicle!.capacity }))
       return
     }
     setApiError('')
     createRoute.mutate({
       name: routeName || undefined,
       vehicleId: selectedVehicleId || undefined,
+      deliveryDate: deliveryDate || undefined,
       originAddress: depot.address || undefined,
       originLat: depot.lat,
       originLng: depot.lng,
@@ -326,9 +411,10 @@ export default function RoutesPage() {
   }
 
   const selectedRoute = (routes as Route[]).find((r) => r.id === selectedRouteId) ?? null
-  const activeRoutes = (routes as Route[]).filter((r) => r.status !== 'completed')
+  const activeRoutes = (routes as Route[]).filter((r) => r.status !== 'completed' && r.status !== 'in_progress')
+  const inProgressRoutes = (routes as Route[]).filter((r) => r.status === 'in_progress')
   const historyRoutes = (routes as Route[]).filter((r) => r.status === 'completed')
-  const tabRoutes = historyTab === 'active' ? activeRoutes : historyRoutes
+  const tabRoutes = historyTab === 'active' ? activeRoutes : historyTab === 'in_progress' ? inProgressRoutes : historyRoutes
   const q = search.trim().toLowerCase()
   const visibleRoutes = tabRoutes.filter((r) => {
     const matchName = !q
@@ -359,7 +445,7 @@ export default function RoutesPage() {
         id: 'origin',
         lat: selectedRoute.originLat,
         lng: selectedRoute.originLng,
-        label: selectedRoute.originAddress || 'Punto de partida',
+        label: selectedRoute.originAddress || t('routes.legendStart'),
         isOrigin: true,
       })
     }
@@ -387,20 +473,33 @@ export default function RoutesPage() {
     .slice()
     .sort((a, b) => (a.stopOrder ?? 0) - (b.stopOrder ?? 0)) ?? []
 
+  // Aggregate all items across the route's orders (description -> total quantity)
+  const aggregatedItems = (() => {
+    const acc: Record<string, number> = {}
+    for (const o of orderedStops) {
+      for (const it of (o.items ?? [])) {
+        const key = (it.name || it.description || '').trim()
+        if (!key) continue
+        acc[key] = (acc[key] || 0) + (it.quantity || 0)
+      }
+    }
+    return Object.entries(acc).map(([description, quantity]) => ({ description, quantity }))
+  })()
+
   const isOverCapacity = (route: Route) =>
     route.vehicle != null && route.totalWeight > route.vehicle.capacity
 
   const statusBadge = (status: string) => {
     const map: Record<string, string> = {
-      pending: 'bg-yellow-100 text-yellow-700',
-      in_transit: 'bg-blue-100 text-blue-700',
-      delivered: 'bg-green-100 text-green-700',
-      active: 'bg-blue-100 text-blue-700',
       planned: 'bg-yellow-100 text-yellow-700',
+      in_progress: 'bg-blue-100 text-blue-700',
       completed: 'bg-green-100 text-green-700',
     }
     return map[status] ?? 'bg-gray-100 text-gray-600'
   }
+
+  const statusLabel = (status: string) => t(`routes.status.${status}`)
+  const fmtDate = (d?: string | null) => d ? new Date(d).toLocaleDateString() : null
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -414,7 +513,13 @@ export default function RoutesPage() {
                 onClick={() => { setHistoryTab('active'); setSelectedRouteId(null) }}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${historyTab === 'active' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
               >
-                {t('routes.active')} <span className="ml-1 text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">{activeRoutes.length}</span>
+                {t('routes.active')} <span className="ml-1 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">{activeRoutes.length}</span>
+              </button>
+              <button
+                onClick={() => { setHistoryTab('in_progress'); setSelectedRouteId(null) }}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${historyTab === 'in_progress' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                {t('routes.inProgress')} <span className="ml-1 text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">{inProgressRoutes.length}</span>
               </button>
               <button
                 onClick={() => { setHistoryTab('history'); setSelectedRouteId(null) }}
@@ -475,7 +580,7 @@ export default function RoutesPage() {
             <div className="space-y-3 overflow-y-auto min-h-0 pr-1">
             {visibleRoutes.length === 0 ? (
               <div className="bg-white rounded-2xl p-8 text-center text-gray-500 shadow-md">
-                {historyTab === 'active' ? t('routes.noActive') : t('routes.noCompleted')}
+                {historyTab === 'active' ? t('routes.noActive') : historyTab === 'history' ? t('routes.noCompleted') : t('routes.noInProgress')}
               </div>
             ) : (
               visibleRoutes.map((route) => (
@@ -514,10 +619,13 @@ export default function RoutesPage() {
                       {route.originAddress && (
                         <p className="text-xs text-gray-400 mt-0.5 truncate"><Icon icon="mdi:map-marker-outline" className="inline align-text-bottom mr-1" />{route.originAddress}</p>
                       )}
+                      {route.deliveryDate && (
+                        <p className="text-xs text-gray-400 mt-0.5 truncate"><Icon icon="mdi:calendar" className="inline align-text-bottom mr-1" />{fmtDate(route.deliveryDate)}</p>
+                      )}
                     </div>
                     <div className="flex flex-col items-end gap-1 shrink-0">
                       <span className={`text-xs px-2 py-1 rounded-full ${statusBadge(route.status)}`}>
-                        {route.status}
+                        {statusLabel(route.status)}
                       </span>
                       {isOverCapacity(route) && (
                         <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
@@ -528,7 +636,7 @@ export default function RoutesPage() {
                   </div>
                   <div className="flex items-center justify-between mt-3">
                     <div>
-                      <span className="text-sm font-bold text-primary">{format(route.totalPrice)}</span>
+                      <span className="text-sm font-bold text-primary font-mono">{format(route.totalPrice)}</span>
                     </div>
                     {route.status !== 'completed' && (
                       <button
@@ -559,7 +667,7 @@ export default function RoutesPage() {
                         </span>
                       )}
                       <h3 className="font-bold text-gray-800 truncate">
-                        {selectedRoute.name || selectedRoute.routeCode || 'Ruta'}
+                        {selectedRoute.name || selectedRoute.routeCode || t('routes.title')}
                       </h3>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
@@ -574,18 +682,39 @@ export default function RoutesPage() {
                           {showStopsModal && (
                             <>
                               <div className="fixed inset-0 z-20" onClick={() => setShowStopsModal(false)} />
-                              <div className="absolute right-0 top-full mt-2 w-80 max-h-[60vh] overflow-y-auto bg-white rounded-xl shadow-xl border z-30 p-2 space-y-2">
+                              <div className="absolute right-0 top-full mt-2 w-96 max-w-[90vw] max-h-[65vh] overflow-y-auto bg-white rounded-xl shadow-xl border z-30 p-2 space-y-2">
+                                {aggregatedItems.length > 0 && (
+                                  <div className="bg-amber-50 rounded-lg p-2">
+                                    <p className="text-xs font-semibold text-amber-700 mb-1 flex items-center gap-1"><Icon icon="mdi:package-variant-closed" />{t('routes.totalLoad')}</p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {aggregatedItems.map((it, i) => (
+                                        <span key={i} className="text-[11px] bg-white border border-amber-200 rounded-full px-2 py-0.5">{it.description} <b>×{it.quantity}</b></span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                                 <p className="text-xs font-semibold text-gray-500 px-1 pt-1">{t('routes.stopsAndPrice', { n: orderedStops.length })}</p>
                                 {orderedStops.map((order, idx) => (
-                                  <div key={order.id} className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg">
-                                    <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold shrink-0">{idx + 1}</span>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-xs font-medium truncate">{order.customerName}</p>
-                                      <p className="text-[11px] text-gray-500 truncate">{order.endAddress || order.address}</p>
-                                      <p className="text-[11px] text-gray-400">{order.weight} kg{order.segmentKm != null ? ` · ${t('routes.kmFromStart', { km: order.segmentKm.toFixed(1) })}` : ''}</p>
+                                  <div key={order.id} className="p-2 bg-blue-50 rounded-lg">
+                                    <div className="flex items-center gap-2">
+                                      <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold shrink-0">{idx + 1}</span>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-medium truncate">{order.customerName}</p>
+                                        <p className="text-[11px] text-gray-500 truncate">{order.endAddress || order.address}</p>
+                                        <p className="text-[11px] text-gray-400">{order.weight} kg{order.segmentKm != null ? ` · ${t('routes.kmFromStart', { km: order.segmentKm.toFixed(1) })}` : ''}</p>
+                                      </div>
+                                      {order.price != null && (
+                                        <p className="text-xs font-semibold text-blue-700 shrink-0">{format(order.price)}</p>
+                                      )}
                                     </div>
-                                    {order.price != null && (
-                                      <p className="text-xs font-semibold text-blue-700 shrink-0">{format(order.price)}</p>
+                                    {(order.items && order.items.length > 0) ? (
+                                      <div className="flex flex-wrap gap-1 mt-1.5 pl-7">
+                                        {order.items.map((it, i) => (
+                                          <span key={i} className="text-[11px] bg-white border rounded-full px-2 py-0.5">{it.name || it.description} <b>×{it.quantity}</b></span>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <p className="text-[11px] text-gray-300 italic mt-1 pl-7">{t('routes.noItems')}</p>
                                     )}
                                   </div>
                                 ))}
@@ -594,7 +723,16 @@ export default function RoutesPage() {
                           )}
                         </div>
                       )}
-                      {selectedRoute.status !== 'completed' && (
+                      {selectedRoute.status === 'planned' && (
+                        <button
+                          onClick={() => startRoute.mutate(selectedRoute.id)}
+                          disabled={startRoute.isPending}
+                          className="text-xs px-3 py-1.5 bg-amber-500 text-white rounded-xl font-medium hover:bg-amber-600 disabled:opacity-50 whitespace-nowrap inline-flex items-center gap-1"
+                        >
+                          <Icon icon="mdi:play-circle-outline" />{startRoute.isPending ? t('routes.starting') : t('routes.start')}
+                        </button>
+                      )}
+                      {selectedRoute.status === 'in_progress' && (
                         <button
                           onClick={() => completeRoute.mutate(selectedRoute.id)}
                           disabled={completeRoute.isPending}
@@ -610,12 +748,19 @@ export default function RoutesPage() {
                       )}
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-3 shrink-0">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600 mb-3 shrink-0">
+                    <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${statusBadge(selectedRoute.status)}`}>{statusLabel(selectedRoute.status)}</span>
                     <span className="flex items-center gap-1"><Icon icon="mdi:road-variant" />{t('routes.kmInclReturn', { km: selectedRoute.totalDistance.toFixed(1) })}</span>
                     <span className="flex items-center gap-1"><Icon icon="mdi:weight" />{selectedRoute.totalWeight.toFixed(1)} kg</span>
-                    <span className="font-semibold text-primary flex items-center gap-1"><Icon icon="mdi:cash" />{format(selectedRoute.totalPrice)}</span>
+                    <span className="font-semibold text-primary flex items-center gap-1 font-mono"><Icon icon="mdi:cash" />{format(selectedRoute.totalPrice)}</span>
                     {selectedRoute.vehicle && (
                       <span className="flex items-center gap-1"><Icon icon="mdi:truck-outline" />{selectedRoute.vehicle.name}{selectedRoute.vehicle.plate ? ` · ${selectedRoute.vehicle.plate}` : ''}</span>
+                    )}
+                    {selectedRoute.deliveryDate && (
+                      <span className="flex items-center gap-1"><Icon icon="mdi:calendar" />{fmtDate(selectedRoute.deliveryDate)}</span>
+                    )}
+                    {aggregatedItems.length > 0 && (
+                      <span className="flex items-center gap-1"><Icon icon="mdi:package-variant-closed" />{t('routes.totalLoad')}: {aggregatedItems.reduce((s, i) => s + i.quantity, 0)}</span>
                     )}
                   </div>
                   <div className="flex-1 min-h-0">
@@ -809,6 +954,15 @@ export default function RoutesPage() {
                             onChange={(e) => setRouteName(e.target.value)}
                             className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                             placeholder={t('routes.namePlaceholder')}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">{t('routes.deliveryDateOpt')}</label>
+                          <input
+                            type="date"
+                            value={deliveryDate}
+                            onChange={(e) => setDeliveryDate(e.target.value)}
+                            className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                           />
                         </div>
                         <div className="flex justify-end">

@@ -14,6 +14,8 @@ interface UserRow {
   name: string
   role: string
   createdAt: string
+  branchId?: string | null
+  branch?: { id: string; name: string } | null
   _count?: {
     orders: number
     routes: number
@@ -21,11 +23,17 @@ interface UserRow {
   }
 }
 
+interface BranchOption {
+  id: string
+  name: string
+}
+
 const defaultCreate = {
   name: '',
   email: '',
   password: '',
   role: 'operator',
+  branchId: '',
 }
 
 export default function UsersPage() {
@@ -38,6 +46,7 @@ export default function UsersPage() {
   const [editName, setEditName] = useState('')
   const [editRole, setEditRole] = useState('operator')
   const [editPassword, setEditPassword] = useState('')
+  const [editBranchId, setEditBranchId] = useState('')
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ['users'],
@@ -46,6 +55,15 @@ export default function UsersPage() {
         headers: { Authorization: `Bearer ${token}` }
       })
       return res.data as UserRow[]
+    },
+    enabled: !!token && user?.role === 'admin'
+  })
+
+  const { data: branches = [] } = useQuery({
+    queryKey: ['branches'],
+    queryFn: async () => {
+      const res = await axios.get('/api/branches', { headers: { Authorization: `Bearer ${token}` } })
+      return res.data as BranchOption[]
     },
     enabled: !!token && user?.role === 'admin'
   })
@@ -65,7 +83,7 @@ export default function UsersPage() {
   })
 
   const updateUser = useMutation({
-    mutationFn: async (payload: { id: string; name: string; role: string; password?: string }) => {
+    mutationFn: async (payload: { id: string; name: string; role: string; password?: string; branchId?: string | null }) => {
       const res = await axios.patch(`/api/users/${payload.id}`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       })
@@ -77,6 +95,7 @@ export default function UsersPage() {
       setEditName('')
       setEditRole('operator')
       setEditPassword('')
+      setEditBranchId('')
     }
   })
 
@@ -128,6 +147,7 @@ export default function UsersPage() {
                   <th className="text-left px-4 py-3">{t('common.name')}</th>
                   <th className="text-left px-4 py-3">{t('usr.colEmail')}</th>
                   <th className="text-left px-4 py-3">{t('usr.colRole')}</th>
+                  <th className="text-left px-4 py-3">{t('usr.branch')}</th>
                   <th className="text-left px-4 py-3">{t('usr.colActivity')}</th>
                   <th className="text-left px-4 py-3">{t('common.actions')}</th>
                 </tr>
@@ -140,6 +160,7 @@ export default function UsersPage() {
                     <td className="px-4 py-3">
                       <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">{row.role}</span>
                     </td>
+                    <td className="px-4 py-3 text-gray-600 text-xs">{row.branch?.name || '—'}</td>
                     <td className="px-4 py-3 text-gray-600 text-xs">
                       {row._count ? t('usr.activity', { o: row._count.orders, r: row._count.routes, v: row._count.vehicles }) : '-'}
                     </td>
@@ -151,6 +172,7 @@ export default function UsersPage() {
                             setEditName(row.name)
                             setEditRole(row.role)
                             setEditPassword('')
+                            setEditBranchId(row.branchId || '')
                           }}
                           className="text-blue-600 hover:text-blue-800 text-xs font-medium flex items-center gap-1"
                         >
@@ -212,6 +234,16 @@ export default function UsersPage() {
                 <option value="dispatcher">dispatcher</option>
                 <option value="viewer">viewer</option>
               </select>
+              <select
+                value={form.branchId}
+                onChange={(e) => setForm({ ...form, branchId: e.target.value })}
+                className="w-full px-3 py-2 border rounded-xl"
+              >
+                <option value="">{t('usr.noBranch')}</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
             </div>
             <div className="flex gap-2 justify-end mt-4">
               <button onClick={() => setShowCreate(false)} className="px-4 py-2 border rounded-xl">{t('common.cancel')}</button>
@@ -252,6 +284,16 @@ export default function UsersPage() {
                 <option value="dispatcher">dispatcher</option>
                 <option value="viewer">viewer</option>
               </select>
+              <select
+                value={editBranchId}
+                onChange={(e) => setEditBranchId(e.target.value)}
+                className="w-full px-3 py-2 border rounded-xl"
+              >
+                <option value="">{t('usr.noBranch')}</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
               <input
                 type="password"
                 value={editPassword}
@@ -268,6 +310,7 @@ export default function UsersPage() {
                     id: editing.id,
                     name: editName,
                     role: editRole,
+                    branchId: editBranchId || null,
                     ...(editPassword ? { password: editPassword } : {})
                   })
                 }}

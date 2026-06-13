@@ -12,8 +12,16 @@ export async function GET(req: NextRequest) {
     where: { userId: user.id as string },
     orderBy: { createdAt: 'desc' },
     include: {
-      route: { select: { id: true, name: true } },
-      vehicle: { select: { id: true, name: true, type: true, plate: true } },
+      route: {
+        select: {
+          id: true,
+          name: true,
+          routeCode: true,
+          status: true,
+          deliveryDate: true,
+          vehicle: { select: { name: true, plate: true } },
+        },
+      },
     }
   })
 

@@ -24,11 +24,14 @@ interface MapComponentProps {
   onMapClick?: (point: { lat: number; lng: number }) => void
   /** Map height (CSS value). Use '100%' to fill a flex parent. Default '400px'. */
   height?: string
+  /** Initial center when there are no stops/selected point (e.g. user's branch). */
+  defaultCenter?: { lat: number; lng: number } | null
+  defaultZoom?: number
 }
 
 type MapLayer = Marker | Polyline
 
-export default function MapComponent({ stops, onStopClick, selectable = false, selectedPoint = null, onMapClick, height = '400px' }: MapComponentProps) {
+export default function MapComponent({ stops, onStopClick, selectable = false, selectedPoint = null, onMapClick, height = '400px', defaultCenter = null, defaultZoom = 11 }: MapComponentProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<Map | null>(null)
   const markersRef = useRef<MapLayer[]>([])
@@ -49,7 +52,10 @@ export default function MapComponent({ stops, onStopClick, selectable = false, s
       })
 
       if (!mapInstanceRef.current && mapRef.current) {
-        mapInstanceRef.current = L.map(mapRef.current, { attributionControl: false }).setView([-23.5505, -46.6333], 11)
+        const initCenter: [number, number] = defaultCenter
+          ? [defaultCenter.lat, defaultCenter.lng]
+          : [-23.5505, -46.6333]
+        mapInstanceRef.current = L.map(mapRef.current, { attributionControl: false }).setView(initCenter, defaultZoom)
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '© OpenStreetMap contributors',
         }).addTo(mapInstanceRef.current)
@@ -128,7 +134,7 @@ export default function MapComponent({ stops, onStopClick, selectable = false, s
         })
         const selectedMarker = L.marker([selectedPoint.lat, selectedPoint.lng], { icon: selIcon })
           .addTo(mapInstanceRef.current)
-          .bindPopup('<b>Ubicación seleccionada</b>')
+          .bindPopup(`<b>${selectedPoint.lat.toFixed(5)}, ${selectedPoint.lng.toFixed(5)}</b>`)
         markersRef.current.push(selectedMarker)
       }
 
@@ -212,6 +218,8 @@ export default function MapComponent({ stops, onStopClick, selectable = false, s
         mapInstanceRef.current.setView([stops[0].lat, stops[0].lng], 13)
       } else if (selectedPoint) {
         mapInstanceRef.current.setView([selectedPoint.lat, selectedPoint.lng], 13)
+      } else if (defaultCenter) {
+        mapInstanceRef.current.setView([defaultCenter.lat, defaultCenter.lng], defaultZoom)
       }
 
       mapInstanceRef.current.off('click')
@@ -223,7 +231,7 @@ export default function MapComponent({ stops, onStopClick, selectable = false, s
     }
 
     initMap()
-  }, [stops, onStopClick, selectable, selectedPoint, onMapClick])
+  }, [stops, onStopClick, selectable, selectedPoint, onMapClick, defaultCenter, defaultZoom])
 
   return (
     <div className="relative" style={{ height }}>

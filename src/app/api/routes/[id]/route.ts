@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
 import {
   greedyRouteOptimization,
-  calculateRouteSegments,
-  calculateClientDistances,
-  calculateOrderPrice,
-  haversineDistance,
+  computeRoutePricing,
 } from '@/lib/pricing'
 
 export const dynamic = 'force-dynamic'
+
+interface OrderItem {
+  productId?: string
+  name?: string
+  description?: string
+  weight?: number
+  packaging?: string | null
+  category?: string | null
+  quantity: number
+}
 
 interface StopInput {
   customerName: string
@@ -18,6 +26,13 @@ interface StopInput {
   lat: number
   lng: number
   operationNumber?: string | null
+  items?: OrderItem[]
+}
+
+function weightFromItems(items: OrderItem[] | undefined, fallback: number): number {
+  if (!Array.isArray(items) || items.length === 0) return fallback || 1
+  const w = items.reduce((a, it) => a + (Number(it.weight) || 0) * (Number(it.quantity) || 0), 0)
+  return w > 0 ? w : (fallback || 1)
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -86,13 +101,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!settings) {
       settings = await prisma.settings.create({ data: { baseFee: 5.0, costPerKm: 1.5, costPerKg: 0.5 } })
     }
-    const config = { baseFee: settings.baseFee, costPerKm: settings.costPerKm, costPerKg: settings.costPerKg }
+    const costPerKm = settings.costPerKm
     const origin = { lat: route.originLat ?? 0, lng: route.originLng ?? 0 }
 
     // Capacity validation (existing + new)
     if (route.vehicleId && route.vehicle) {
       const existingWeight = route.orders.reduce((sum, o) => sum + o.weight, 0)
-      const newWeight = newStops.reduce((sum, s) => sum + (s.weight || 0), 0)
+      const newWeight = newStops.reduce((sum, s) => sum + weightFromItems(s.items, s.weight), 0)
       const totalWeight = existingWeight + newWeight
       if (totalWeight > route.vehicle.capacity) {
         return NextResponse.json({
@@ -114,7 +129,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             endLng: s.lng,
             lat: s.lat,
             lng: s.lng,
-            weight: s.weight || 1,
+            weight: weightFromItems(s.items, s.weight),
+            items: (Array.isArray(s.items) ? s.items : []) as unknown as Prisma.InputJsonValue,
             tripLeg: 'outbound',
             routeId: id,
             userId: user.id as string,
@@ -135,32 +151,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return { id: o.id, lat: (o.endLat ?? o.lat)!, lng: (o.endLng ?? o.lng)! }
     })
 
-    const drivingSegments = calculateRouteSegments(origin, orderedStops)
-    const clientDistances = calculateClientDistances(origin, orderedStops)
+    const { totalDistance, cumKm, prices } = computeRoutePricing(origin, orderedStops, costPerKm)
 
-    let totalDistance = 0
     let totalWeight = 0
     let totalPrice = 0
 
     for (let i = 0; i < optimizedIds.length; i++) {
       const oid = optimizedIds[i]
       const order = ordersMap[oid]
-      const segmentKm = clientDistances[i] ?? 0
-      const price = calculateOrderPrice(segmentKm, order.weight, config)
-      totalDistance += drivingSegments[i] ?? 0
+      const price = prices[i] ?? 0
       totalWeight += order.weight
       totalPrice += price
 
       await prisma.order.update({
         where: { id: oid },
-        data: { stopOrder: i + 1, tripLeg: 'outbound', price, segmentKm }
+        data: { stopOrder: i + 1, tripLeg: 'outbound', price, segmentKm: cumKm[i] ?? 0 }
       })
-    }
-
-    // Return leg back to depot
-    if (orderedStops.length > 0) {
-      const last = orderedStops[orderedStops.length - 1]
-      totalDistance += haversineDistance(last.lat, last.lng, origin.lat, origin.lng)
     }
 
     const updated = await prisma.route.update({

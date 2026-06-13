@@ -1,15 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
 import {
   greedyRouteOptimization,
-  calculateRouteSegments,
-  calculateClientDistances,
-  calculateOrderPrice,
-  haversineDistance,
+  computeRoutePricing,
 } from '@/lib/pricing'
 
 export const dynamic = 'force-dynamic'
+
+interface OrderItem {
+  productId?: string
+  name?: string
+  description?: string
+  weight?: number
+  packaging?: string | null
+  category?: string | null
+  quantity: number
+}
+
+function weightFromItems(items: OrderItem[] | undefined, fallback: number): number {
+  if (!Array.isArray(items) || items.length === 0) return fallback || 1
+  const w = items.reduce((a, it) => a + (Number(it.weight) || 0) * (Number(it.quantity) || 0), 0)
+  return w > 0 ? w : (fallback || 1)
+}
 
 interface StopInput {
   customerName: string
@@ -18,6 +32,7 @@ interface StopInput {
   lat: number
   lng: number
   operationNumber?: string | null
+  items?: OrderItem[]
 }
 
 async function generateRouteCode(): Promise<string> {
@@ -60,6 +75,7 @@ export async function GET(req: NextRequest) {
           segmentKm: true,
           stopOrder: true,
           tripLeg: true,
+          items: true,
         }
       }
     }
@@ -78,6 +94,7 @@ export async function POST(req: NextRequest) {
     originAddress,
     originLat,
     originLng,
+    deliveryDate,
     stops = [],
   }: {
     name?: string
@@ -85,6 +102,7 @@ export async function POST(req: NextRequest) {
     originAddress?: string
     originLat?: number
     originLng?: number
+    deliveryDate?: string
     stops?: StopInput[]
   } = await req.json()
 
@@ -121,7 +139,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Validate vehicle capacity against total stop weight
-  const totalStopWeight = stops.reduce((sum, s) => sum + (s.weight || 0), 0)
+  const totalStopWeight = stops.reduce((sum, s) => sum + weightFromItems(s.items, s.weight), 0)
   if (vehicleId) {
     const vehicle = await prisma.vehicle.findFirst({ where: { id: vehicleId } })
     if (vehicle && totalStopWeight > vehicle.capacity) {
@@ -144,6 +162,7 @@ export async function POST(req: NextRequest) {
       originAddress: originAddress ?? null,
       originLat,
       originLng,
+      deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
     }
   })
 
@@ -160,7 +179,8 @@ export async function POST(req: NextRequest) {
           endLng: s.lng,
           lat: s.lat,
           lng: s.lng,
-          weight: s.weight || 1,
+          weight: weightFromItems(s.items, s.weight),
+          items: (Array.isArray(s.items) ? s.items : []) as unknown as Prisma.InputJsonValue,
           tripLeg: 'outbound',
           routeId: route.id,
           userId: user.id as string,
@@ -180,35 +200,23 @@ export async function POST(req: NextRequest) {
     return { id: o.id, lat: o.endLat!, lng: o.endLng! }
   })
 
-  // Real driving distance per consecutive segment (depot -> stop1 -> stop2 ...)
-  const drivingSegments = calculateRouteSegments(origin, orderedStops)
-  // Per-client distance from depot (for pricing, charged x2 for round trip)
-  const clientDistances = calculateClientDistances(origin, orderedStops)
+  // Segment-based fare: equal split of total distance cost + cumulative inter-stop legs.
+  const { totalDistance, cumKm, prices } = computeRoutePricing(origin, orderedStops, config.costPerKm)
 
-  let totalDistance = 0
   let totalWeight = 0
   let totalPrice = 0
 
   for (let i = 0; i < optimizedIds.length; i++) {
     const orderId = optimizedIds[i]
     const order = ordersMap[orderId]
-    const segmentKm = clientDistances[i] ?? 0
-    const price = calculateOrderPrice(segmentKm, order.weight, config)
-
-    totalDistance += drivingSegments[i] ?? 0
+    const price = prices[i] ?? 0
     totalWeight += order.weight
     totalPrice += price
 
     await prisma.order.update({
       where: { id: orderId },
-      data: { stopOrder: i + 1, price, segmentKm },
+      data: { stopOrder: i + 1, price, segmentKm: cumKm[i] ?? 0 },
     })
-  }
-
-  // Return leg: truck drives back from the last stop to the depot.
-  if (orderedStops.length > 0) {
-    const last = orderedStops[orderedStops.length - 1]
-    totalDistance += haversineDistance(last.lat, last.lng, origin.lat, origin.lng)
   }
 
   await prisma.route.update({

@@ -24,6 +24,8 @@ export async function GET(req: NextRequest) {
       name: true,
       role: true,
       createdAt: true,
+      branchId: true,
+      branch: { select: { id: true, name: true } },
       _count: {
         select: {
           orders: true,
@@ -41,7 +43,7 @@ export async function POST(req: NextRequest) {
   const auth = ensureAdmin(req)
   if (auth.error) return auth.error
 
-  const { email, password, name, role } = await req.json()
+  const { email, password, name, role, branchId } = await req.json()
 
   if (!email || !password || !name) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
@@ -59,6 +61,7 @@ export async function POST(req: NextRequest) {
       password: hashed,
       name,
       role: typeof role === 'string' && role ? role : 'operator',
+      branchId: branchId || null,
     },
     select: {
       id: true,

@@ -11,27 +11,27 @@ export default function Navbar({ title }: { title: string }) {
   const t = useT()
 
   return (
-    <div className="h-16 bg-white border-b px-6 flex items-center justify-between shadow-sm">
-      <h2 className="text-xl font-bold text-gray-800">{title}</h2>
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-1.5">
-          <Icon icon="mdi:translate" className="text-gray-400 text-lg" />
+    <div className="h-16 bg-paper/80 backdrop-blur border-b border-line px-6 flex items-center justify-between sticky top-0 z-20">
+      <h2 className="text-[1.4rem] font-bold text-ink tracking-tight">{title}</h2>
+      <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-1 bg-white border border-line rounded-xl pl-2.5 pr-1.5 py-1 shadow-sm">
+          <Icon icon="mdi:translate" className="text-ink-soft/60 text-base" />
           <select
             value={language}
             onChange={(e) => setLanguage(e.target.value as 'es' | 'en')}
-            className="text-sm border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-700"
+            className="text-xs font-semibold bg-transparent text-ink py-1 pr-0.5 focus:outline-none cursor-pointer"
             title={t('navbar.language')}
           >
             <option value="es">ES</option>
             <option value="en">EN</option>
           </select>
         </div>
-        <div className="flex items-center gap-1.5">
-          <Icon icon="mdi:cash-multiple" className="text-gray-400 text-lg" />
+        <div className="flex items-center gap-1 bg-white border border-line rounded-xl pl-2.5 pr-1.5 py-1 shadow-sm">
+          <Icon icon="mdi:cash-multiple" className="text-ink-soft/60 text-base" />
           <select
             value={code}
             onChange={(e) => setDisplayCurrency(e.target.value)}
-            className="text-sm border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-700"
+            className="text-xs font-semibold font-mono bg-transparent text-ink py-1 pr-0.5 focus:outline-none cursor-pointer"
             title={t('navbar.currency')}
           >
             {currencies.map((c) => (
@@ -39,13 +39,13 @@ export default function Navbar({ title }: { title: string }) {
             ))}
           </select>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white text-sm font-bold">
-            {user?.name?.[0] || 'U'}
+        <div className="flex items-center gap-2.5 pl-2 ml-1 border-l border-line">
+          <div className="text-right leading-tight">
+            <p className="text-sm font-semibold text-ink">{user?.name || 'User'}</p>
+            <p className="text-[11px] uppercase tracking-wider text-ink-soft/70">{user?.role || 'admin'}</p>
           </div>
-          <div>
-            <p className="text-sm font-medium text-gray-800">{user?.name || 'User'}</p>
-            <p className="text-xs text-gray-500">{user?.role || 'admin'}</p>
+          <div className="w-9 h-9 bg-gradient-to-br from-primary to-[#0E9F6E] rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-md">
+            {user?.name?.[0]?.toUpperCase() || 'U'}
           </div>
         </div>
       </div>

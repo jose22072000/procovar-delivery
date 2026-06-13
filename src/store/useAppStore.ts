@@ -1,10 +1,20 @@
 import { create } from 'zustand'
 
+export interface BranchInfo {
+  id: string
+  name: string
+  lat: number
+  lng: number
+  areaKm2: number
+}
+
 interface User {
   id: string
   email: string
   name: string
   role: string
+  branchId?: string | null
+  branch?: BranchInfo | null
 }
 
 export type Lang = 'es' | 'en'
@@ -26,7 +36,13 @@ export const useAppStore = create<AppState>((set) => ({
   token: null,
   displayCurrency: 'USD',
   language: 'es',
-  setUser: (user) => set({ user }),
+  setUser: (user) => {
+    if (typeof window !== 'undefined') {
+      if (user) localStorage.setItem('user', JSON.stringify(user))
+      else localStorage.removeItem('user')
+    }
+    set({ user })
+  },
   setToken: (token) => {
     if (typeof window !== 'undefined') {
       if (token) {
@@ -52,6 +68,7 @@ export const useAppStore = create<AppState>((set) => ({
   logout: () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('token')
+      localStorage.removeItem('user')
     }
     set({ user: null, token: null })
   },
@@ -62,6 +79,10 @@ if (typeof window !== 'undefined') {
   const storedToken = localStorage.getItem('token')
   if (storedToken) {
     useAppStore.setState({ token: storedToken })
+  }
+  const storedUser = localStorage.getItem('user')
+  if (storedUser) {
+    try { useAppStore.setState({ user: JSON.parse(storedUser) }) } catch { /* ignore */ }
   }
   const storedCurrency = localStorage.getItem('displayCurrency')
   if (storedCurrency) {

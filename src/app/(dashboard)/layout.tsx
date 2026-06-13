@@ -18,9 +18,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!token) return null
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen">
       <Sidebar />
-      <div className="flex-1 ml-64">
+      <div className="flex-1 ml-64 animate-rise">
         {children}
       </div>
     </div>

@@ -45,6 +45,13 @@ export function formatCoords(lat: number, lng: number): string {
   return `${lat.toFixed(5)}, ${lng.toFixed(5)}`
 }
 
+/** Rough Leaflet zoom level for a branch coverage area in km². Larger area → lower zoom. */
+export function zoomFromArea(areaKm2: number): number {
+  const a = areaKm2 > 0 ? areaKm2 : 1
+  const z = Math.round(13 - Math.log2(Math.sqrt(a)))
+  return Math.max(8, Math.min(16, z))
+}
+
 /**
  * Detect and parse a "lat, lng" coordinate string typed directly into a text field.
  * Accepts e.g. "-23.5505, -46.6333" or "23.55 -46.63". Returns null if not a coord pair.

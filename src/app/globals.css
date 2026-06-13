@@ -3,12 +3,120 @@
 @tailwind utilities;
 
 :root {
-  --primary: #2563EB;
-  --secondary: #10B981;
-  --accent: #F59E0B;
+  --primary: #1F4FE0;
+  --secondary: #0E9F6E;
+  --accent: #E8820C;
+  --paper: #F7F4EF;
+  --paper-2: #FFFFFF;
+  --ink: #17130E;
+  --ink-soft: #5C544A;
+  --line: #E8E2D7;
+}
+
+/* ---------- Base ---------- */
+html {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 body {
-  background-color: #F9FAFB;
-  color: #111827;
+  background-color: var(--paper);
+  color: var(--ink);
+  font-feature-settings: "ss01", "cv01";
+}
+
+/* Atmospheric layer: faint warm grid + film grain over the paper */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(23, 19, 14, 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(23, 19, 14, 0.025) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(ellipse 120% 90% at 50% 0%, #000 35%, transparent 100%);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.4;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+}
+
+/* Keep app chrome above the texture */
+#__next, body > div { position: relative; z-index: 1; }
+
+/* ---------- Typography ---------- */
+h1, h2, h3, h4, h5 {
+  font-family: var(--font-display), sans-serif;
+  letter-spacing: -0.018em;
+}
+
+/* Tabular, even numerals everywhere mono is used (codes, money, coords, km) */
+.font-mono {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+::selection {
+  background: rgba(31, 79, 224, 0.18);
+  color: var(--ink);
+}
+
+/* ---------- Surfaces ---------- */
+/* Hairline border on every white card — cohesive elevation without touching JSX */
+.bg-white.rounded-2xl,
+.bg-white.rounded-xl {
+  border: 1px solid var(--line);
+}
+
+/* ---------- Focus ---------- */
+*:focus-visible {
+  outline: 2px solid rgba(31, 79, 224, 0.45);
+  outline-offset: 1px;
+}
+
+/* ---------- Scrollbars ---------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cfc7ba transparent;
+}
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-thumb {
+  background: #d4ccbe;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: #bdb3a2; background-clip: content-box; }
+
+/* ---------- Leaflet polish ---------- */
+.leaflet-container { font-family: var(--font-sans); }
+.leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  box-shadow: 0 12px 30px -10px rgba(23, 19, 14, 0.3);
+  border: 1px solid var(--line);
+}
+.leaflet-popup-content { margin: 10px 14px; font-size: 12px; }
+.leaflet-bar a {
+  border-radius: 8px !important;
+  color: var(--ink) !important;
+}
+.leaflet-control-zoom { border: none !important; box-shadow: 0 4px 14px -4px rgba(23,19,14,0.25); border-radius: 10px; overflow: hidden; }
+
+/* ---------- Motion ---------- */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-rise { animation: rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise { animation: none; }
 }

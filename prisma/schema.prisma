@@ -19,6 +19,35 @@ model User {
   routes       Route[]
   vehicles     Vehicle[]
   savedOrigins SavedOrigin[]
+  branchId     String?
+  branch       Branch?       @relation("UserBranch", fields: [branchId], references: [id])
+  createdBranches Branch[]    @relation("BranchCreator")
+  products     Product[]
+}
+
+model Product {
+  id              String   @id @default(cuid())
+  name            String
+  weight          Float    @default(0)
+  packaging       String?
+  unitsPerPackage Float?
+  category        String?
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  createdAt       DateTime @default(now())
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  name      String
+  address   String?
+  lat       Float
+  lng       Float
+  areaKm2   Float    @default(1)
+  creatorId String
+  creator   User     @relation("BranchCreator", fields: [creatorId], references: [id])
+  members   User[]   @relation("UserBranch")
+  createdAt DateTime @default(now())
 }
 
 model SavedOrigin {
@@ -71,6 +100,8 @@ model Order {
   user            User      @relation(fields: [userId], references: [id])
   price           Float?
   segmentKm       Float?
+  // Itemized breakdown of what to deliver to this client: [{ description, quantity }]
+  items           Json      @default("[]")
   vehicleAssignments OrderVehicle[]
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -101,6 +132,7 @@ model Route {
   totalDistance   Float    @default(0)
   totalWeight     Float    @default(0)
   totalPrice      Float    @default(0)
+  deliveryDate    DateTime?
   orders          Order[]
   vehicleId       String?
   vehicle         Vehicle? @relation(fields: [vehicleId], references: [id])

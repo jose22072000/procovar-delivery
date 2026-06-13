@@ -9,16 +9,19 @@ import { useT } from '@/lib/i18n'
 import { Icon } from '@iconify/react'
 import Link from 'next/link'
 
-function StatCard({ label, value, icon, color, sub }: { label: string; value: string | number; icon: string; color: string; sub?: string }) {
+function StatCard({ label, value, icon, color, accent, sub }: { label: string; value: string | number; icon: string; color: string; accent: string; sub?: string }) {
   return (
-    <div className={`bg-white rounded-2xl shadow-md p-6 border-l-4 ${color}`}>
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-gray-500">{label}</p>
-          <p className="text-3xl font-bold text-gray-800 mt-1">{value}</p>
-          {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+    <div className="group bg-white rounded-2xl shadow-md p-6 relative overflow-hidden transition-all hover:shadow-lg hover:-translate-y-0.5">
+      <span className={`absolute inset-x-0 top-0 h-1 ${color}`} />
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-soft/70">{label}</p>
+          <p className="text-[2.1rem] leading-none font-extrabold font-display text-ink mt-2.5 tabular-nums">{value}</p>
+          {sub && <p className="text-xs text-ink-soft/70 mt-2">{sub}</p>}
         </div>
-        <Icon icon={icon} className="text-4xl text-gray-300" />
+        <span className={`shrink-0 w-11 h-11 rounded-xl flex items-center justify-center ${accent}`}>
+          <Icon icon={icon} className="text-2xl" />
+        </span>
       </div>
     </div>
   )
@@ -49,20 +52,23 @@ export default function DashboardPage() {
             label={t('dash.totalOrders')}
             value={stats?.totalOrders || 0}
             icon="mdi:package-variant-closed"
-            color="border-blue-500"
+            color="bg-primary"
+            accent="bg-primary/10 text-primary"
           />
           <StatCard
             label={t('dash.totalRevenue')}
             value={format(stats?.totalRevenue || 0)}
-            icon="mdi:currency-usd"
-            color="border-green-500"
+            icon="mdi:cash-multiple"
+            color="bg-secondary"
+            accent="bg-secondary/10 text-secondary"
             sub={stats?.totalOrders > 0 ? t('dash.avgPerOrder', { v: format(stats.avgPrice || 0) }) : undefined}
           />
           <StatCard
             label={t('dash.vehiclesRegistered')}
             value={stats?.totalVehicles || 0}
             icon="mdi:truck-outline"
-            color="border-purple-500"
+            color="bg-accent"
+            accent="bg-accent/10 text-accent"
             sub={t('dash.totalWeightDelivered', { v: (stats?.totalWeight || 0).toFixed(0) })}
           />
         </div>

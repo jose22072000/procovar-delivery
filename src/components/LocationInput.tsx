@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { forwardGeocode, reverseGeocode, parseCoordInput, formatCoords } from '@/lib/geocode'
 import { useT } from '@/lib/i18n'
+import { useAppStore } from '@/store/useAppStore'
+import { zoomFromArea } from '@/lib/geocode'
 import { Icon } from '@iconify/react'
 
 const MapComponent = dynamic(() => import('@/components/MapComponent'), { ssr: false })
@@ -37,6 +39,9 @@ export default function LocationInput({
   placeholder,
 }: LocationInputProps) {
   const t = useT()
+  const branch = useAppStore((s) => s.user?.branch)
+  const branchCenter = branch ? { lat: branch.lat, lng: branch.lng } : null
+  const branchZoom = branch ? zoomFromArea(branch.areaKm2) : 11
   const labelText = label ?? t('loc.label')
   const placeholderText = placeholder ?? t('loc.placeholder')
   const [status, setStatus] = useState<'idle' | 'searching' | 'ok' | 'notfound'>(
@@ -121,12 +126,14 @@ export default function LocationInput({
         <MapComponent
           stops={
             selectedPoint
-              ? [{ id: 'loc', lat: selectedPoint.lat, lng: selectedPoint.lng, label: value.address || 'Ubicación', stopType: 'end' as const }]
+              ? [{ id: 'loc', lat: selectedPoint.lat, lng: selectedPoint.lng, label: value.address || t('loc.label'), stopType: 'end' as const }]
               : []
           }
           selectable
           selectedPoint={selectedPoint}
           onMapClick={handleMapClick}
+          defaultCenter={branchCenter}
+          defaultZoom={branchZoom}
         />
       </div>
       <p className="text-xs text-gray-500 mt-1">{t('loc.help')}</p>
